@@ -71,9 +71,9 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
      - "**RM 144.30** spent this week", in soft red, counting from Monday.
 
      Only the spent-this-month card shows for past cycles. The markup is `.stat` cards holding `.num`, `.words` and `.extra` spans, baseline-aligned with wrapping. Layout: on a laptop, the hero takes the full width and the three others sit in a row. On a phone, they stack full width. Per week was dropped at his request.
-  4. **By category** with percentages.
-  5. **Top places**, top 5, with "×N" only when N > 1.
-  6. The **transactions** list: name, then "date · category" in small text, then the amount.
+  3. **By category** with percentages.
+  4. **Top places**, top 5, with "×N" only when N > 1.
+  5. The **transactions** list: name, then "date · category" in small text, then the amount.
 
   Past cycles show only the spent card, categories, places and transactions. Top-ups show in the list as "Money in" but don't count as spending. All text is HTML-escaped.
 - **Errors** are returned as `{"error": "..."}` with HTTP 502 and shown in a red box on the page.
