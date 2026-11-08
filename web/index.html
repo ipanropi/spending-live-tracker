@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spending Tracker</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#f6f7f9">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --out:#dc2626; --in:#16a34a; }
@@ -16,6 +20,8 @@
   select, button { font:inherit; font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--text); }
   button { background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:600; }
   button:disabled { opacity:.6; cursor:default; }
+  button.plain { background:#fff; color:var(--text); border:1px solid var(--line); font-weight:500; }
+  #logout { margin:0; }
   #status { color:var(--muted); font-size:13px; }
   #error { display:none; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:8px; margin-bottom:12px; font-size:14px; }
   .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:12px; }
@@ -45,6 +51,7 @@
       <span id="status">Loading…</span>
       <select id="month"></select>
       <button id="update">Update</button>
+      <form id="logout" method="post" action="/logout" hidden><button class="plain">Log out</button></form>
     </div>
   </header>
   <div id="error"></div>
@@ -86,10 +93,14 @@ function update() {
   $('update').disabled = true;
   $('status').textContent = 'Updating…';
   $('error').style.display = 'none';
-  fetch('/api/data')
-    .then(r => r.json())
+  fetch('/api/data', { cache: 'no-store' })
+    .then(r => {
+      if (r.status === 401) { location.href = '/login'; return new Promise(() => {}); } // logged out
+      return r.json();
+    })
     .then(d => {
       if (d.error) throw new Error(d.error);
+      $('logout').hidden = !d.canLogout;
       DATA = d;
       DATA.tx.forEach(t => { t.d = new Date(t.date); t.month = monthKey(t.d); });
       fillMonths();
@@ -98,11 +109,24 @@ function update() {
     })
     .catch(e => {
       const msg = (e && e.message) || String(e);
-      $('error').textContent = msg === 'Failed to fetch' ? 'The app is not running. Open SpendingTracker again.' : msg;
+      $('error').textContent = e instanceof TypeError // fetch's network error (wording differs per browser)
+        ? "Can't reach the tracker. Check your internet, or open SpendingTracker again if you use the laptop app."
+        : msg;
       $('error').style.display = 'block';
       $('status').textContent = 'Update failed';
     })
     .finally(() => { $('update').disabled = false; });
+}
+
+// Chart.js comes from cdnjs. If that's blocked, skip the charts and still show the numbers.
+function drawChart(old, id, config) {
+  if (old) old.destroy();
+  if (window.Chart) return new Chart($(id), config);
+  const box = $(id).parentElement;
+  $(id).hidden = true;
+  box.style.height = 'auto';
+  if (!box.querySelector('.empty')) box.insertAdjacentHTML('beforeend', '<p class="empty">Chart couldn\'t load. Check your internet.</p>');
+  return null;
 }
 
 function fillMonths() {
@@ -152,8 +176,7 @@ function render() {
       }).join('')
     : '<tr><td class="empty">No spending this month yet.</td></tr>';
 
-  if (pieChart) pieChart.destroy();
-  pieChart = new Chart($('pie'), {
+  pieChart = drawChart(pieChart, 'pie', {
     type: 'doughnut',
     data: {
       labels: catList.map(c => c[0]),
@@ -185,8 +208,7 @@ function render() {
   const months = [];
   for (let i = 5; i >= 0; i--) months.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
   const spentBy = months.map(k => DATA.tx.filter(t => t.month === k && t.amount < 0).reduce((s, t) => s - t.amount, 0));
-  if (trendChart) trendChart.destroy();
-  trendChart = new Chart($('trend'), {
+  trendChart = drawChart(trendChart, 'trend', {
     type: 'bar',
     data: {
       labels: months.map(monthShort),

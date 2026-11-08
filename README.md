@@ -1,8 +1,8 @@
 # Spending Tracker
 
-A small desktop app that shows where your money goes, using live data from your Wise MYR account.
+A small app that shows where your money goes, using live data from your Wise MYR account. Run it on your laptop, or host it as a private website and use it from your phone and other computers.
 
-One 6.5 MB file. Double-click it, and the dashboard opens in your browser. Press **Update** to pull your latest transactions from Wise.
+One 6.7 MB file. Double-click it, and the dashboard opens in your browser. Press **Update** to pull your latest transactions from Wise.
 
 ## What it shows
 
@@ -22,6 +22,28 @@ One 6.5 MB file. Double-click it, and the dashboard opens in your browser. Press
 
 Keep the black window open while you use the dashboard. Close it to stop.
 
+## Use it on your phone and other devices (hosted mode)
+
+The same app can run on a web host. When the `PORT` environment variable is set (hosts like Render and Cloud Run set it for you), it switches to hosted mode:
+
+- It serves the dashboard to any device, behind a login page.
+- It reads your token from `WISE_TOKEN` and never asks for it.
+- It won't start unless both of these are set on the host:
+
+| Variable | Value |
+|---|---|
+| `WISE_TOKEN` | Your read-only Wise API token |
+| `APP_PASSWORD` | The password for the login page, at least 12 characters |
+
+The host must serve the site over HTTPS, because the login cookie only works on HTTPS.
+
+To get an app icon:
+- **Android:** open the site in Chrome, then menu > **Add to Home screen**.
+- **Windows:** in Edge or Chrome, menu > **Install** (or **Apps > Install this site as an app**).
+- **Mac:** in Safari, **File > Add to Dock**. In Chrome, use the install icon in the address bar.
+
+"Keep me logged in" keeps you in for 30 days. Untick it on a shared computer, and use **Log out** when you're done.
+
 ## Categories
 
 Merchants are sorted into categories by keywords in the `categories` list in `main.go`. Anything that doesn't match uses Wise's own merchant category, or goes into "Other". Add keywords there and rebuild.
@@ -40,6 +62,7 @@ Every push to `main` also builds the Windows app on GitHub Actions. Pushing a ta
 
 ## Privacy
 
-- The app only listens on `127.0.0.1`, so nothing else on your network can open it.
-- Your token stays on your computer in `wise_token.txt`, which is ignored by git. Never commit it.
+- On the laptop, the app only listens on `127.0.0.1`, so nothing else on your network can open it.
+- On the laptop, your token stays on your computer in `wise_token.txt`, which is ignored by git. Never commit it.
+- In hosted mode, every page needs the password. After 20 wrong passwords in 15 minutes, it stops accepting logins for a while, but devices already logged in keep working. Changing `APP_PASSWORD` or `WISE_TOKEN` logs out every device.
 - A read-only token can see transactions but cannot move money.

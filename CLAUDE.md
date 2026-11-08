@@ -2,32 +2,49 @@
 
 ## What this is
 
-Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser on his laptop. It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
+Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser. It runs either on his laptop or, in hosted mode, as a private password-protected website for his other devices (Android, Windows, sometimes a Mac). It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
 
 Focus is **tracking** (where money goes, percentages, what's left this month), not budgeting.
 
 ## Status (2026-11-08)
 
-- Code is complete. It builds, and it's been tested only against `dev/mockwise.py` (re-verified 2026-11-08: `go vet` clean, Windows build OK, mock test and bad-token 502 OK). **It has never been run against the real Wise API.**
-- The repo is `ipanropi/spending-live-tracker` (not `spending-tracker` as first planned). It's pushed to branch `ccr-2b2be70a-egwfux`. `main` doesn't exist on GitHub yet, so the CI workflow (which triggers on `main`) hasn't run.
+- Laptop mode is complete. It has only been tested against `dev/mockwise.py`. **It has never been run against the real Wise API.**
+- Hosted mode is built (login page, home-screen manifest and icons) and tested against the mock, including in a phone-sized headless browser. **It hasn't been deployed yet.** The next step is choosing a host (Render or Cloud Run were floated; check current free tiers first) and possibly adding a Dockerfile. Irfan wants to test the real Wise token on the laptop before deploying.
+- The repo is `ipanropi/spending-live-tracker`, not `spending-tracker` as first planned. CI ran green on `main` (run 42447774794) and produced the exe artifact.
 - Irfan has a Wise account and has seen Integrations and tools. He hasn't confirmed that he's created an API token yet.
-- A Windows build (`SpendingTracker.exe`, about 6.5 MB) was sent to him. CI builds it too (see below).
+- A Windows build (`SpendingTracker.exe`, about 6.5 MB, from before hosted mode) was sent to him. CI builds it too.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `main.go` | The whole backend. Go standard library only. |
-| `index.html` | Dashboard UI, embedded into the binary with `go:embed`. Vanilla JS plus Chart.js 4.4.1 from cdnjs. |
-| `.github/workflows/build.yml` | Builds the Windows exe on every push to `main` (as an artifact) and on `v*` tags (as a release). **Untested.** |
+| `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
+| `web/index.html` | Dashboard UI. Vanilla JS plus Chart.js 4.4.1 from cdnjs. If Chart.js can't load, the page skips the charts and still shows the numbers. |
+| `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
+| `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
+| `.github/workflows/build.yml` | Builds the Windows exe on every push to `main` (as an artifact) and on `v*` tags (as a release). Verified on `main`; the tag/release path is untested. |
 | `dev/mockwise.py` | Fake Wise API for testing. |
 | `README.md` | User-facing setup instructions. |
 
 ## How it works
 
-- It listens on `127.0.0.1:8765` (local only), serves `/` (the embedded HTML) and `/api/data` (JSON), and opens the browser.
+Everything in `web/` is embedded into the binary with `go:embed web`. There are two modes, and `PORT` decides which one runs.
+
+**Laptop mode** (no `PORT`)
+- It listens on `127.0.0.1:8765` (local only), opens the browser, and has no login.
 - It runs as a single instance. If the port is already taken, it opens the browser and exits.
 - **Token:** the app reads the `WISE_TOKEN` env var first, then `wise_token.txt` next to the exe. If neither exists, it asks for the token on stdin and saves it with mode 0600. The file is gitignored.
+
+**Hosted mode** (`PORT` set)
+- It listens on `:$PORT`, reads the token only from `WISE_TOKEN`, and refuses to start unless `APP_PASSWORD` is at least 12 characters. In this mode `fail()` exits without waiting for Enter.
+- **Auth:** the `protect` middleware wraps every route. Requests without a valid session get a 303 to `/login`, or a 401 JSON error for `/api/*`, which the page answers by going to `/login`. Public paths: `/login`, `/logout`, the manifest and the icons.
+- **Session:** the cookie `st_session` is `<expiry unix>.<HMAC-SHA256>`. The key is SHA-256 of a version tag plus `WISE_TOKEN` plus `APP_PASSWORD`, so sessions are stateless, survive restarts, and die when either secret changes. The cookie is HttpOnly, Secure and SameSite=Lax. With "Keep me logged in" it lasts 30 days via Max-Age. Without it, it's a browser-session cookie that also expires after 12 hours.
+- **Brute force:** at most 20 wrong passwords per 15 minutes globally, after which the server answers 429. Each wrong password also waits 1 second. Existing sessions keep working during a lockout. Passwords are compared as SHA-256 digests in constant time.
+- **Logout:** `POST /logout` clears the cookie. The button only shows when `/api/data` returns `canLogout: true`.
+- Every response gets `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`. The page and API also get `Cache-Control: no-store`.
+
+**Both modes**
+- Routes are `GET /` and `GET /api/data`, plus the manifest and icons.
 - **`/api/data` flow:**
   1. `GET /v2/profiles` and pick the profile whose type is `PERSONAL`. This is cached in memory.
   2. `GET /v4/profiles/{pid}/balances?types=STANDARD` and pick the `MYR` balance. Also cached.
@@ -60,7 +77,18 @@ WISE_TOKEN=good /tmp/tracker-test < /dev/null &
 curl -s localhost:8765/api/data | python3 -m json.tool
 ```
 
-The mock covers a business plus a personal profile with large IDs, USD and MYR balances, card, deposit, transfer, unmatched-merchant and older-month transactions, and a 401 for a bad token. Chart.js loads from cdnjs, so a headless screenshot needs network access or a route stub.
+The mock covers a business plus a personal profile with large IDs, USD and MYR balances, card, deposit, transfer, unmatched-merchant and older-month transactions, and a 401 for a bad token. Chart.js loads from cdnjs, which the Claude Code cloud sandbox blocks. For headless screenshots, `npm pack chart.js@4.4.1` and route the cdnjs URL to `package/dist/chart.umd.js`.
+
+To test hosted mode, start the same test binary with these variables:
+
+```bash
+PORT=9090 WISE_TOKEN=good APP_PASSWORD='correct horse battery' /tmp/tracker-test &
+curl -s -o /dev/null -w '%{http_code}\n' localhost:9090/          # 303 to /login
+curl -s -c jar -d 'password=correct horse battery&remember=1' localhost:9090/login
+curl -s -b jar localhost:9090/api/data | python3 -m json.tool       # data with canLogout: true
+```
+
+When scripting parallel curls against it, `wait` on their PIDs only. A bare `wait` also waits on the server and hangs.
 
 ## Unverified assumptions: check these first with a real token
 
@@ -78,6 +106,8 @@ The mock covers a business plus a personal profile with large IDs, USD and MYR b
 - **No Claude artifact dashboard.** Those pages can't fetch external hosts.
 - **No Google Sheet or Apps Script.** Irfan wanted the app to call the API directly. An earlier Apps Script web app version existed and has been superseded.
 - **Go instead of Python.** Irfan asked for something fast and lightweight. The result is a single exe with no runtime.
+- **A hosted website, not a native app, for other devices.** He uses Android and Windows, and sometimes a Mac. A website (with a manifest, so it installs to the home screen) covers all three from one build. A native app would mean three builds and Mac signing hassles. Tailscale to the laptop was rejected because the laptop would have to stay on.
+- **A login page, not HTTP basic auth.** The Mac may be shared, and basic auth has no real logout.
 
 ## Ideas not built (only build if Irfan asks)
 
