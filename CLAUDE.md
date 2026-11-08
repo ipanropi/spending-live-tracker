@@ -25,7 +25,7 @@ Weeks are normal calendar weeks, Monday to Sunday, and don't follow either.
 | File | Purpose |
 |---|---|
 | `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
-| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and labels are short ("Left until 22 Nov", "14 days", "Per day"). |
+| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and the overview is written as short sentences, not label-over-number tiles. |
 | `main_test.go` | `go test ./...`: pay-cycle boundaries (payday, the day before, a UTC host, the new year). CI doesn't run it yet. |
 | `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
 | `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
@@ -64,10 +64,13 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **Balance** comes from `endOfStatementBalance`.
 - **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
   1. A **pay-cycle picker** ("7 Nov – 6 Dec").
-  2. For the current cycle only: a hero card, **Left until 22 Nov**, with the Wise balance in green and "N days" under it (counting down to `nextPayday()`), a **Per day** card (balance ÷ days left), and a **Spent this week** card (since Monday). Irfan wanted per day as its own card and asked to drop per week.
-  3. A **Spent this month** card for the cycle, with "avg RM X/day".
+  2. **Overview cards. Each one reads as a sentence, number first** (Irfan asked for "easy to read, left to right"):
+     - "**RM 365.60** left until 22 Nov (14 days left)", the hero, in green. It counts down to `nextPayday()`.
+     - "**RM 26.11** per day", which is the balance ÷ days left.
+     - "**RM 47.40** spent this month (avg RM 23.70 a day)", in soft red. A past cycle reads "spent in 7 Oct – 6 Nov".
+     - "**RM 144.30** spent this week", in soft red, counting from Monday.
 
-  Layout: on a laptop, the four cards sit in one row (2fr 1fr 1fr 1fr). On a phone, the hero is full width, Per day is a slim full-width row with the label left and the amount right, and the two spent cards sit side by side. A narrower per-day card wrapped "RM 127.14" onto two lines at 360px, so test realistic balances (around RM 1,780) at 360px after layout changes.
+     Only the spent-this-month card shows for past cycles. The markup is `.stat` cards holding `.num`, `.words` and `.extra` spans, baseline-aligned with wrapping. Layout: on a laptop, the hero takes the full width and the three others sit in a row. On a phone, they stack full width. Per week was dropped at his request.
   4. **By category** with percentages.
   5. **Top places**, top 5, with "×N" only when N > 1.
   6. The **transactions** list: name, then "date · category" in small text, then the amount.
