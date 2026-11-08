@@ -9,6 +9,7 @@ def iso(days, h=4): return (now - timedelta(days=days)).replace(hour=h, minute=3
 ST = {"transactions": [
   {"type":"DEBIT","date":iso(0),"amount":{"value":-12.50,"currency":"MYR"},"details":{"type":"CARD","description":"Card transaction of 12.50 MYR issued by Zus Coffee","merchant":{"name":"ZUS COFFEE PENANG","category":"Restaurants"}},"referenceNumber":"CARD-1"},
   {"type":"DEBIT","date":iso(1),"amount":{"value":-25.00,"currency":"MYR"},"details":{"type":"CARD","merchant":{"name":"GRAB*RIDE","category":"Taxicabs"}}},
+  {"type":"DEBIT","date":iso(1, 2),"amount":{"value":-9.90,"currency":"MYR"},"details":{"type":"CARD","merchant":{"name":"ZUS COFFEE PENANG","category":"Restaurants"}}},
   {"type":"DEBIT","date":iso(2),"amount":{"value":-48.90,"currency":"MYR"},"details":{"type":"CARD","merchant":{"name":"99 SPEEDMART 1234"}}},
   {"type":"CREDIT","date":iso(3),"amount":{"value":500,"currency":"MYR"},"details":{"type":"DEPOSIT","description":"Received money","senderName":"MUHAMMAD IRFAN"}},
   {"type":"DEBIT","date":iso(4),"amount":{"value":30,"currency":"MYR"},"details":{"type":"TRANSFER","recipient":{"name":"Ali Bin Abu","bankAccount":"123"}}},

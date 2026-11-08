@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#111110">
 <style>
   :root { color-scheme:dark; --bg:#111110; --card:#1a1a19; --input:#222220; --text:#f0efec; --muted:#a09f97; --line:#2f2f2c;
-          --accent:#2563eb; --bar:#3987e5; --out:#f87171; --in:#4ade80; --radius:4px; }
+          --accent:#2563eb; --bar:#3987e5; --good:#4ade80; --spend:#f87171; --radius:4px; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
   .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
@@ -24,29 +24,36 @@
   #logout { margin:0; }
   #status { color:var(--muted); font-size:13px; }
   #error { display:none; background:#2a1515; color:#fca5a5; border:1px solid #5c2424; padding:12px; border-radius:var(--radius); margin-bottom:12px; font-size:14px; }
+
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; min-width:0; }
   .overview { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:12px; }
   .overview.past { grid-template-columns:1fr; }
   .label { color:var(--muted); font-size:13px; }
-  .hero-value { font-size:40px; font-weight:700; margin-top:4px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; }
+  .big { font-size:40px; font-weight:700; margin-top:4px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; }
   .value { font-size:26px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
-  .sub { color:var(--muted); font-size:12px; margin-top:6px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:6px; }
+  .good { color:var(--good); } .spend { color:var(--spend); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
   @media (max-width:800px) {
     .overview { grid-template-columns:1fr 1fr; }
     .overview .hero { grid-column:1 / -1; }
     .grid { grid-template-columns:1fr; }
   }
-  @media (max-width:420px) { .hero-value { font-size:34px; } .value { font-size:22px; } }
-  h2 { font-size:15px; margin:0 0 12px; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  td, th { padding:8px 4px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-  th { color:var(--muted); font-weight:500; font-size:12px; }
-  .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-  .out { color:var(--out); } .in { color:var(--in); }
+  @media (max-width:420px) { .big { font-size:34px; } .value { font-size:22px; } }
+
+  h2 { font-size:15px; margin:0 0 4px; }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .row:last-child { border-bottom:none; padding-bottom:0; }
+  .row .main { min-width:0; overflow-wrap:anywhere; }
+  .row.cat { display:grid; grid-template-columns:1fr auto 3em; }
+  .meta { color:var(--muted); font-size:12px; margin-top:3px; }
+  .times { color:var(--muted); font-size:12px; }
+  .amt, .pct { white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
+  .pct { color:var(--muted); }
+  .amt.in { color:var(--good); }
   .bar { height:6px; background:var(--line); border-radius:2px; overflow:hidden; margin-top:6px; }
   .bar span { display:block; height:100%; background:var(--bar); }
-  .empty { color:var(--muted); }
+  .empty { color:var(--muted); font-size:14px; margin:10px 0 0; }
 </style>
 </head>
 <body>
@@ -55,7 +62,7 @@
     <h1>Spending Tracker</h1>
     <div class="controls">
       <span id="status">Loading…</span>
-      <select id="cycle" aria-label="Pay cycle"></select>
+      <select id="cycle" aria-label="Month"></select>
       <button id="update">Update</button>
       <form id="logout" method="post" action="/logout" hidden><button class="plain">Log out</button></form>
     </div>
@@ -64,20 +71,20 @@
 
   <div class="overview" id="overview">
     <div class="card hero" id="heroCard">
-      <div class="label" id="leftLabel">Left until payday</div>
-      <div class="hero-value" id="left">–</div>
+      <div class="label" id="leftLabel">Left</div>
+      <div class="big good" id="left">–</div>
       <div class="sub" id="pace"></div>
     </div>
-    <div class="card"><div class="label" id="spentLabel">Spent</div><div class="value" id="spent">–</div><div class="sub" id="spentSub"></div></div>
-    <div class="card" id="weekCard"><div class="label">Spent this week</div><div class="value" id="week">–</div><div class="sub" id="weekSub"></div></div>
+    <div class="card"><div class="label" id="spentLabel">Spent this month</div><div class="value spend" id="spent">–</div><div class="sub" id="spentSub"></div></div>
+    <div class="card" id="weekCard"><div class="label">Spent this week</div><div class="value spend" id="week">–</div></div>
   </div>
 
   <div class="grid">
-    <div class="card"><h2>By category</h2><table id="cats"></table></div>
-    <div class="card"><h2>Top places</h2><table id="places"></table></div>
+    <div class="card"><h2>By category</h2><div id="cats"></div></div>
+    <div class="card"><h2>Top places</h2><div id="places"></div></div>
   </div>
 
-  <div class="card"><h2>Transactions</h2><table id="list"></table></div>
+  <div class="card"><h2>Transactions</h2><div id="list"></div></div>
 </div>
 
 <script>
@@ -105,7 +112,7 @@ function cycleStart(d) {
   const s = new Date(d.getFullYear(), d.getMonth(), payDay());
   return d < s ? new Date(d.getFullYear(), d.getMonth() - 1, payDay()) : s;
 }
-const cycleEnd = s => new Date(s.getFullYear(), s.getMonth() + 1, s.getDate()); // next payday
+const cycleEnd = s => new Date(s.getFullYear(), s.getMonth() + 1, s.getDate());
 const keyOf = s => s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0');
 const keyToStart = k => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, payDay()); };
 function cycleLabel(k) {
@@ -129,7 +136,7 @@ function update() {
       DATA.tx.forEach(t => { t.d = new Date(t.date); t.cycle = keyOf(cycleStart(t.d)); });
       fillCycles();
       render();
-      $('status').textContent = 'Updated ' + new Date(d.updated).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+      $('status').textContent = 'Updated ' + new Date(d.updated).toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit' });
     })
     .catch(e => {
       const msg = (e && e.message) || String(e);
@@ -161,29 +168,28 @@ function render() {
   const out = tx.filter(t => t.amount < 0);
   const spent = spentIn(out);
 
-  // Overview: "left" and "this week" only make sense for the cycle you're in now
+  // Overview: "left" and "this week" only make sense for the month you're in now
   $('overview').classList.toggle('past', !isCurrent);
   $('heroCard').hidden = $('weekCard').hidden = !isCurrent;
   if (isCurrent) renderNow(now);
   const days = isCurrent ? daysBetween(start, startOfDay(now)) + 1 : daysBetween(start, end);
-  $('spentLabel').textContent = 'Spent ' + (isCurrent ? 'since ' + dShort(start) : cycleLabel(key));
+  $('spentLabel').textContent = isCurrent ? 'Spent this month' : 'Spent';
   $('spent').textContent = rm(spent);
-  $('spentSub').textContent = rm(spent / days) + ' a day';
+  $('spentSub').textContent = rm(spent / days) + '/day';
 
   // By category, with each one's share of the spending
   const cats = {};
   out.forEach(t => { cats[t.category] = (cats[t.category] || 0) - t.amount; });
   const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]);
   $('cats').innerHTML = catList.length
-    ? '<tr><th>Category</th><th class="num">Amount</th><th class="num">Share</th></tr>' +
-      catList.map(([c, v]) => {
+    ? catList.map(([c, v]) => {
         const pct = spent ? v / spent * 100 : 0;
-        return `<tr><td>${esc(c)}<div class="bar"><span style="width:${pct}%"></span></div></td>` +
-               `<td class="num">${rm(v)}</td><td class="num">${pct.toFixed(0)}%</td></tr>`;
+        return `<div class="row cat"><div class="main">${esc(c)}<div class="bar"><span style="width:${pct}%"></span></div></div>` +
+               `<div class="amt">${rm(v)}</div><div class="pct">${pct.toFixed(0)}%</div></div>`;
       }).join('')
-    : '<tr><td class="empty">No spending in this cycle yet.</td></tr>';
+    : '<p class="empty">No spending yet.</p>';
 
-  // Top places
+  // Top places (times shown only when more than once)
   const places = {};
   out.forEach(t => {
     const p = places[t.name] || (places[t.name] = { total: 0, count: 0 });
@@ -192,21 +198,15 @@ function render() {
   });
   const top = Object.entries(places).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
   $('places').innerHTML = top.length
-    ? '<tr><th>Place</th><th class="num">Times</th><th class="num">Total</th></tr>' +
-      top.map(([n, p]) => `<tr><td>${esc(n)}</td><td class="num">${p.count}</td><td class="num">${rm(p.total)}</td></tr>`).join('')
-    : '<tr><td class="empty">Nothing yet.</td></tr>';
+    ? top.map(([n, p]) => `<div class="row"><div class="main">${esc(n)}${p.count > 1 ? ` <span class="times">×${p.count}</span>` : ''}</div>` +
+                          `<div class="amt">${rm(p.total)}</div></div>`).join('')
+    : '<p class="empty">Nothing yet.</p>';
 
-  // Transactions
+  // Transactions: spending is plain, money in is green with a plus
   $('list').innerHTML = tx.length
-    ? '<tr><th>When</th><th>Place</th><th>Category</th><th class="num">Amount</th></tr>' +
-      tx.map(t => {
-        const when = t.d.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) + ', ' +
-                     t.d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
-        const amt = (t.amount < 0 ? '−' : '+') + rm(Math.abs(t.amount));
-        return `<tr><td>${when}</td><td>${esc(t.name)}</td><td>${esc(t.category)}</td>` +
-               `<td class="num ${t.amount < 0 ? 'out' : 'in'}">${amt}</td></tr>`;
-      }).join('')
-    : '<tr><td class="empty">No transactions in this cycle yet.</td></tr>';
+    ? tx.map(t => `<div class="row"><div class="main">${esc(t.name)}<div class="meta">${dShort(t.d)} · ${esc(t.category)}</div></div>` +
+                  `<div class="amt${t.amount > 0 ? ' in' : ''}">${t.amount > 0 ? '+' : ''}${rm(Math.abs(t.amount))}</div></div>`).join('')
+    : '<p class="empty">No transactions yet.</p>';
 }
 
 // The Wise balance is what's left: you top up your spending money on each payday.
@@ -214,21 +214,20 @@ function renderNow(now) {
   const payday = nextPayday(now);
   const daysLeft = daysBetween(startOfDay(now), payday); // counts today
   const bal = DATA.balance;
-  $('leftLabel').textContent = 'Left until payday, ' + dShort(payday);
+  $('leftLabel').textContent = 'Left until ' + dShort(payday);
   $('left').textContent = bal == null ? '–' : (bal < 0 ? '−' : '') + rm(Math.abs(bal));
-  $('left').classList.toggle('out', bal != null && bal < 0);
+  $('left').className = 'big ' + (bal != null && bal < 0 ? 'spend' : 'good');
   const pace = [];
   if (bal > 0) {
-    pace.push('About ' + rm(bal / daysLeft) + ' a day');
-    if (daysLeft >= 7) pace.push(rm(bal / daysLeft * 7) + ' a week');
+    pace.push(rm(bal / daysLeft) + '/day');
+    if (daysLeft >= 7) pace.push(rm(bal / daysLeft * 7) + '/week');
   }
-  pace.push(daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' to go');
+  pace.push(daysLeft + (daysLeft === 1 ? ' day' : ' days'));
   $('pace').textContent = pace.join(' · ');
 
   const monday = startOfDay(now);
   monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7); // weeks run Monday to Sunday
   $('week').textContent = rm(spentIn(DATA.tx.filter(t => t.amount < 0 && t.d >= monday)));
-  $('weekSub').textContent = 'Since Mon, ' + dShort(monday);
 }
 
 $('update').addEventListener('click', update);
