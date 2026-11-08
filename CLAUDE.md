@@ -8,8 +8,8 @@ Focus is **tracking** (where money goes, percentages, what's left this month), n
 
 ## Status (2026-11-08)
 
-- Code is complete. It builds, and it's been tested only against `dev/mockwise.py`. **It has never been run against the real Wise API.**
-- Not pushed yet. The target is `ipanropi/spending-tracker` (private). Irfan is creating the empty repo, then push `main`.
+- Code is complete. It builds, and it's been tested only against `dev/mockwise.py` (re-verified 2026-11-08: `go vet` clean, Windows build OK, mock test and bad-token 502 OK). **It has never been run against the real Wise API.**
+- The repo is `ipanropi/spending-live-tracker` (not `spending-tracker` as first planned). It's pushed to branch `ccr-2b2be70a-egwfux`. `main` doesn't exist on GitHub yet, so the CI workflow (which triggers on `main`) hasn't run.
 - Irfan has a Wise account and has seen Integrations and tools. He hasn't confirmed that he's created an API token yet.
 - A Windows build (`SpendingTracker.exe`, about 6.5 MB) was sent to him. CI builds it too (see below).
 
