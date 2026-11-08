@@ -144,7 +144,10 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Android signing:** `android/app/build.gradle.kts` signs with `android/key.properties` if it exists. CI writes that file from the `ANDROID_KEYSTORE_*` secrets. Otherwise it falls back to the debug key, and then a new APK can't update an old one. Irfan hasn't added the secrets yet.
 
 **CI** is `.github/workflows/app.yml`:
-- **Every run:** analyze, test and a format check. Windows and macOS builds were verified green in run 42467360054. Android failed twice on a GitHub 504 while the Gradle wrapper downloaded Gradle from GitHub releases (runs 42467360054 and 42468675873), before any app code compiled. The wrapper now uses the smaller `-bin` distribution, and the build step retries up to 4 times, but only when the log shows `org.gradle.wrapper.Download`. After one green run, setup-java's Gradle cache skips the download.
+- **Every run:** analyze, test and a format check. Windows and macOS builds were verified green in run 42467360054. Android kept failing on a GitHub 504 while the Gradle wrapper downloaded Gradle from GitHub releases. Over about 75 minutes, runs 42467360054, 42468675873 and 42469402257 failed, the last after 4 retries, all before any app code compiled. So a **Fetch Gradle** step now downloads the zip with curl:
+- first from `services.gradle.org` (which redirects to GitHub), then from Gradle's own CDN, `downloads.gradle.org`;
+- it checks the zip against Gradle's published `.sha256`;
+- it points `distributionUrl` at the local file, for that CI run only.
 - **Pushes to `main` and manual runs:** an Android APK per CPU type, and a Windows zip.
 - **macOS:** only on `v*` tags and manual runs, because macOS minutes cost 10× on private repos.
 - **Tags:** also create a GitHub release.

@@ -72,21 +72,26 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
           printf 'storeFile=upload-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
-      - name: Build (one small APK per CPU type)
-        # Gradle downloads itself from GitHub releases, which sometimes answers 504.
-        # Retry only that failure; a real build error fails straight away.
-        # After one green run, setup-java's cache holds Gradle and this download is skipped.
+      - name: Fetch Gradle
+        # The Gradle wrapper downloads Gradle from GitHub releases, which kept answering 504.
+        # Fetch it here instead, from GitHub or Gradle's own CDN, with retries, check it
+        # against Gradle's published SHA-256, and point the wrapper at the local copy.
         run: |
-          set -o pipefail
-          for attempt in 1 2 3 4; do
-            if [ "$attempt" -gt 1 ]; then
-              echo "::warning::Gradle download failed, retrying (attempt $attempt of 4)"
-              sleep $(( (attempt - 1) * 30 ))
+          props=android/gradle/wrapper/gradle-wrapper.properties
+          zip=$(sed -n 's#^distributionUrl=.*/##p' "$props")
+          sum=$(curl -fsSL --retry 5 --retry-all-errors "https://services.gradle.org/distributions/$zip.sha256")
+          for url in "https://services.gradle.org/distributions/$zip" "https://downloads.gradle.org/distributions/$zip"; do
+            echo "Trying $url"
+            if curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/$zip" "$url" &&
+               echo "$sum  $RUNNER_TEMP/$zip" | sha256sum -c -; then
+              sed -i "s#^distributionUrl=.*#distributionUrl=file://$RUNNER_TEMP/$zip#" "$props"
+              exit 0
             fi
-            flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols 2>&1 | tee build.log && exit 0
-            grep -q 'org.gradle.wrapper.Download' build.log || exit 1
           done
+          echo "::error::Couldn't download $zip from GitHub or from Gradle's CDN"
           exit 1
+      - name: Build (one small APK per CPU type)
+        run: flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
       - name: Name the APKs
         run: |
           mkdir -p dist
