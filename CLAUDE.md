@@ -144,10 +144,10 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Android signing:** `android/app/build.gradle.kts` signs with `android/key.properties` if it exists. CI writes that file from the `ANDROID_KEYSTORE_*` secrets. Otherwise it falls back to the debug key, and then a new APK can't update an old one. Irfan hasn't added the secrets yet.
 
 **CI** is `.github/workflows/app.yml`:
-- **Every run:** analyze, test and a format check. Windows and macOS builds were verified green in run 42467360054. Android kept failing on a GitHub 504 while the Gradle wrapper downloaded Gradle from GitHub releases. Over about 75 minutes, runs 42467360054, 42468675873 and 42469402257 failed, the last after 4 retries, all before any app code compiled. So a **Fetch Gradle** step now downloads the zip with curl:
-- first from `services.gradle.org` (which redirects to GitHub), then from Gradle's own CDN, `downloads.gradle.org`;
-- it checks the zip against Gradle's published `.sha256`;
-- it points `distributionUrl` at the local file, for that CI run only.
+- **Every run:** analyze, test and a format check. Windows and macOS builds were verified green in run 42467360054. Android kept failing on a GitHub 504 while the Gradle wrapper downloaded Gradle from GitHub releases. Over about 75 minutes, runs 42467360054, 42468675873 and 42469402257 failed, the last after 4 retries, all before any app code compiled. Run 42470567159 showed that Gradle's CDN (`downloads.gradle.org`) also redirects zips to GitHub, though it serves the `.sha256` files itself. So a **Fetch Gradle** step tries three routes, then points `distributionUrl` at the local file for that run only:
+1. `services.gradle.org`, checked against Gradle's `.sha256`;
+2. the same release asset through GitHub's API (`gh release download`, with the job token), also checked;
+3. the runner's preinstalled Gradle, zipped, but only if it's at least the pinned version, since AGP 9.1 needs Gradle 9.3.1 or newer. This logs a warning.
 - **Pushes to `main` and manual runs:** an Android APK per CPU type, and a Windows zip.
 - **macOS:** only on `v*` tags and manual runs, because macOS minutes cost 10× on private repos.
 - **Tags:** also create a GitHub release.

@@ -73,22 +73,38 @@ jobs:
           printf 'storeFile=upload-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
       - name: Fetch Gradle
-        # The Gradle wrapper downloads Gradle from GitHub releases, which kept answering 504.
-        # Fetch it here instead, from GitHub or Gradle's own CDN, with retries, check it
-        # against Gradle's published SHA-256, and point the wrapper at the local copy.
+        # The Gradle wrapper downloads Gradle from github.com/.../releases/download, which
+        # kept answering 504 (Gradle's CDN redirects there too). Get it another way and
+        # point the wrapper at the local copy, for this run only.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           props=android/gradle/wrapper/gradle-wrapper.properties
-          zip=$(sed -n 's#^distributionUrl=.*/##p' "$props")
-          sum=$(curl -fsSL --retry 5 --retry-all-errors "https://services.gradle.org/distributions/$zip.sha256")
-          for url in "https://services.gradle.org/distributions/$zip" "https://downloads.gradle.org/distributions/$zip"; do
-            echo "Trying $url"
-            if curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/$zip" "$url" &&
-               echo "$sum  $RUNNER_TEMP/$zip" | sha256sum -c -; then
-              sed -i "s#^distributionUrl=.*#distributionUrl=file://$RUNNER_TEMP/$zip#" "$props"
-              exit 0
+          zip=$(sed -n 's#^distributionUrl=.*/##p' "$props")   # gradle-9.3.1-bin.zip
+          ver=${zip#gradle-}; ver=${ver%-bin.zip}               # 9.3.1
+          out=$RUNNER_TEMP/$zip
+          sum=$(curl -fsSL --retry 5 --retry-all-errors "https://services.gradle.org/distributions/$zip.sha256") || sum=""
+          verified() { [ -n "$sum" ] && echo "$sum  $out" | sha256sum -c -; }
+          use() { sed -i "s#^distributionUrl=.*#distributionUrl=file://$1#" "$props"; echo "Using $1"; exit 0; }
+
+          echo "1. Gradle's usual download"
+          curl -fsSL --retry 3 --retry-all-errors -o "$out" "https://services.gradle.org/distributions/$zip" && verified && use "$out"
+
+          echo "2. The same release asset through GitHub's API"
+          gh release download "v$ver" -R gradle/gradle-distributions -p "$zip" -D "$RUNNER_TEMP" --clobber && verified && use "$out"
+
+          echo "3. The Gradle that comes with the runner, if it's at least $ver (the Android plugin needs that)"
+          if bin=$(command -v gradle); then
+            home=$(dirname "$(dirname "$(readlink -f "$bin")")")
+            have=$(gradle --version 2>/dev/null | sed -n 's/^Gradle //p')
+            echo "Runner has Gradle $have in $home"
+            if [ -n "$have" ] && [ "$(printf '%s\n' "$ver" "$have" | sort -V | head -1)" = "$ver" ]; then
+              (cd "$(dirname "$home")" && zip -qr "$RUNNER_TEMP/gradle-$have-bin.zip" "$(basename "$home")")
+              echo "::warning::Using the runner's Gradle $have instead of $ver"
+              use "$RUNNER_TEMP/gradle-$have-bin.zip"
             fi
-          done
-          echo "::error::Couldn't download $zip from GitHub or from Gradle's CDN"
+          fi
+          echo "::error::Couldn't get Gradle $ver: GitHub's release downloads failed and the runner's Gradle is missing or too old"
           exit 1
       - name: Build (one small APK per CPU type)
         run: flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
