@@ -25,7 +25,7 @@ Weeks are normal calendar weeks, Monday to Sunday, and don't follow either.
 | File | Purpose |
 |---|---|
 | `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
-| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and the overview is written as short sentences, not label-over-number tiles. |
+| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and the overview puts each number on its own line with a short phrase under it. |
 | `main_test.go` | `go test ./...`: pay-cycle boundaries (payday, the day before, a UTC host, the new year). CI doesn't run it yet. |
 | `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
 | `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
@@ -64,13 +64,13 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **Balance** comes from `endOfStatementBalance`.
 - **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
   1. A **pay-cycle picker** ("7 Nov – 6 Dec").
-  2. **Overview cards. Each one reads as a sentence, number first** (Irfan asked for "easy to read, left to right"):
-     - "**RM 365.60** left until 22 Nov (14 days left)", the hero, in green. It counts down to `nextPayday()`.
-     - "**RM 26.11** per day", which is the balance ÷ days left.
-     - "**RM 47.40** spent this month (avg RM 23.70 a day)", in soft red. A past cycle reads "spent in 7 Oct – 6 Nov".
-     - "**RM 144.30** spent this week", in soft red, counting from Monday.
+  2. **Overview cards.** In each one the **number is the focal point on its own line**, with the words under it in smaller, softer text finishing the sentence. Irfan asked for this: easy to read, and no text on the same line as the number.
+     - **RM 365.60** / "left until 22 Nov (14 days left)": the hero, in green, counting down to `nextPayday()`.
+     - **RM 26.11** / "per day": the balance ÷ days left.
+     - **RM 144.30** / "spent this week": in soft red, counting from Monday.
+     - **RM 47.40** / "spent this month (avg RM 23.70 a day)": in soft red. A past cycle reads "spent in 7 Oct – 6 Nov".
 
-     Only the spent-this-month card shows for past cycles. The markup is `.stat` cards holding `.num`, `.words` and `.extra` spans, baseline-aligned with wrapping. Layout: on a laptop, the hero takes the full width and the three others sit in a row. On a phone, they stack full width. Per week was dropped at his request.
+     Only the spent-this-month card shows for past cycles. Per week was dropped at his request. Layout: on a laptop, the hero takes the full width and the other three sit in a row. On a phone, the hero is full width, per day and this week sit side by side, and this month is full width (class `wide`). `fitNumbers()` shrinks a number only when it would overflow its card, for example per day the day before payday on a 360px phone. Test at 360px with four-digit amounts after any layout change.
   3. **By category** with percentages.
   4. **Top places**, top 5, with "×N" only when N > 1.
   5. The **transactions** list: name, then "date · category" in small text, then the amount.

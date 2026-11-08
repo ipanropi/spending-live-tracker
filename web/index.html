@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#111110">
 <style>
-  :root { color-scheme:dark; --bg:#111110; --card:#1a1a19; --input:#222220; --text:#f0efec; --muted:#a09f97; --line:#2f2f2c;
+  :root { color-scheme:dark; --bg:#111110; --card:#1a1a19; --input:#222220; --text:#f0efec; --text2:#c3c2b7; --muted:#a09f97; --line:#2f2f2c;
           --accent:#2563eb; --bar:#3987e5; --good:#4ade80; --spend:#f87171; --radius:4px; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
@@ -27,20 +27,21 @@
   #error { display:none; background:#2a1515; color:#fca5a5; border:1px solid #5c2424; padding:12px; border-radius:var(--radius); margin-bottom:12px; font-size:14px; }
 
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; min-width:0; }
-  /* Overview: each card reads as one sentence, number first: "RM 365.60 left until 22 Nov (14 days left)" */
+  /* Overview: the number is the focal point on its own line; the words under it finish the sentence */
   .overview { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:12px; }
   .overview .hero { grid-column:1 / -1; }
   .overview.past { grid-template-columns:1fr; }
-  .stat { display:flex; flex-wrap:wrap; align-items:baseline; column-gap:8px; row-gap:2px; }
-  .num { font-size:24px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
-  .hero .num { font-size:clamp(30px, 9vw, 40px); letter-spacing:-0.5px; }
-  .words { font-size:16px; }
-  .hero .words { font-size:18px; }
-  .extra { font-size:14px; color:var(--muted); }
+  .num { font-size:clamp(22px, 6.2vw, 30px); font-weight:700; line-height:1.15; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .hero .num { font-size:clamp(36px, 11vw, 48px); letter-spacing:-0.5px; }
+  .desc { color:var(--text2); font-size:14px; margin-top:6px; }
+  .hero .desc { font-size:16px; }
+  .extra { color:var(--muted); }
   .good { color:var(--good); } .spend { color:var(--spend); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
   @media (max-width:800px) {
-    .overview { grid-template-columns:1fr; }
+    /* Phone: left full width, then per day | this week, then this month full width */
+    .overview { grid-template-columns:1fr 1fr; }
+    .overview .wide { grid-column:1 / -1; }
     .grid { grid-template-columns:1fr; }
   }
 
@@ -73,10 +74,16 @@
   <div id="error"></div>
 
   <div class="overview" id="overview">
-    <div class="card stat hero now"><span class="num good" id="left">–</span> <span class="words" id="leftWords">left</span> <span class="extra" id="leftExtra"></span></div>
-    <div class="card stat now"><span class="num" id="perDay">–</span> <span class="words">per day</span></div>
-    <div class="card stat"><span class="num spend" id="spent">–</span> <span class="words" id="spentWords">spent this month</span> <span class="extra" id="spentExtra"></span></div>
-    <div class="card stat now"><span class="num spend" id="week">–</span> <span class="words">spent this week</span></div>
+    <div class="card hero wide now">
+      <div class="num good" id="left">–</div>
+      <div class="desc"><span id="leftWords">left</span> <span class="extra" id="leftExtra"></span></div>
+    </div>
+    <div class="card now"><div class="num" id="perDay">–</div><div class="desc">per day</div></div>
+    <div class="card now"><div class="num spend" id="week">–</div><div class="desc">spent this week</div></div>
+    <div class="card wide">
+      <div class="num spend" id="spent">–</div>
+      <div class="desc"><span id="spentWords">spent this month</span> <span class="extra" id="spentExtra"></span></div>
+    </div>
   </div>
 
   <div class="grid">
@@ -176,6 +183,7 @@ function render() {
   $('spent').textContent = rm(spent);
   $('spentWords').textContent = isCurrent ? 'spent this month' : 'spent in ' + cycleLabel(key);
   $('spentExtra').textContent = '(avg ' + rm(spent / days) + ' a day)';
+  fitNumbers();
 
   // By category, with each one's share of the spending
   const cats = {};
@@ -208,6 +216,17 @@ function render() {
                   `<div class="amt${t.amount > 0 ? ' in' : ''}">${t.amount > 0 ? '+' : ''}${rm(Math.abs(t.amount))}</div></div>`).join('')
     : '<p class="empty">No transactions yet.</p>';
 }
+
+// Shrink an overview number just enough to fit its card. Only long amounts on narrow phones need it,
+// e.g. "per day" the day before payday, when it's the whole balance.
+function fitNumbers() {
+  document.querySelectorAll('#overview .num').forEach(el => {
+    el.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth && size > 14) el.style.fontSize = --size + 'px';
+  });
+}
+window.addEventListener('resize', fitNumbers);
 
 // The Wise balance is what's left: you top up your spending money on each payday.
 function renderNow(now) {
