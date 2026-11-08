@@ -92,9 +92,15 @@ const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const daysBetween = (a, b) => Math.round((b - a) / DAY);
 const dShort = d => d.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
 
-// A pay cycle runs from payday (the 7th) to the day before the next one, e.g. 7 Nov – 6 Dec.
-// Cycles are keyed by the year and month they start in.
+// The summary covers a monthly cycle from the 7th to the 6th, e.g. 7 Nov – 6 Dec, keyed by the year and month it starts in.
+// "Left" counts down to the next payday instead (the 7th or the 22nd), since Wise is topped up on both.
 const payDay = () => (DATA && DATA.cycleDay) || 7;
+const paydays = () => (DATA && DATA.paydays) || [7, 22];
+function nextPayday(now) {
+  const today = startOfDay(now), dates = [];
+  for (const m of [0, 1]) for (const d of paydays()) dates.push(new Date(today.getFullYear(), today.getMonth() + m, d));
+  return dates.filter(d => d > today).sort((a, b) => a - b)[0];
+}
 function cycleStart(d) {
   const s = new Date(d.getFullYear(), d.getMonth(), payDay());
   return d < s ? new Date(d.getFullYear(), d.getMonth() - 1, payDay()) : s;
@@ -158,7 +164,7 @@ function render() {
   // Overview: "left" and "this week" only make sense for the cycle you're in now
   $('overview').classList.toggle('past', !isCurrent);
   $('heroCard').hidden = $('weekCard').hidden = !isCurrent;
-  if (isCurrent) renderNow(now, end);
+  if (isCurrent) renderNow(now);
   const days = isCurrent ? daysBetween(start, startOfDay(now)) + 1 : daysBetween(start, end);
   $('spentLabel').textContent = 'Spent ' + (isCurrent ? 'since ' + dShort(start) : cycleLabel(key));
   $('spent').textContent = rm(spent);
@@ -203,11 +209,12 @@ function render() {
     : '<tr><td class="empty">No transactions in this cycle yet.</td></tr>';
 }
 
-// The Wise balance is what's left: you top up your spending money on payday.
-function renderNow(now, nextPayday) {
-  const daysLeft = daysBetween(startOfDay(now), nextPayday); // counts today
+// The Wise balance is what's left: you top up your spending money on each payday.
+function renderNow(now) {
+  const payday = nextPayday(now);
+  const daysLeft = daysBetween(startOfDay(now), payday); // counts today
   const bal = DATA.balance;
-  $('leftLabel').textContent = 'Left until payday, ' + dShort(nextPayday);
+  $('leftLabel').textContent = 'Left until payday, ' + dShort(payday);
   $('left').textContent = bal == null ? '–' : (bal < 0 ? '−' : '') + rm(Math.abs(bal));
   $('left').classList.toggle('out', bal != null && bal < 0);
   const pace = [];

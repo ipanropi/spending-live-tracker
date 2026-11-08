@@ -39,9 +39,12 @@ var wiseAPI = "https://api.wise.com"
 // Malaysia time (no daylight saving). Hosts run on UTC, so cycle dates are worked out in MYT explicitly.
 var myt = time.FixedZone("MYT", 8*60*60)
 
+// Days of the month you get paid and top up Wise. "Left" on the dashboard counts down to the next one.
+var paydays = []int{7, 22}
+
 const (
 	currency     = "MYR"
-	payDay       = 7 // pay cycles run from the 7th to the 6th; the dashboard's "left" counts down to the next one
+	payDay       = 7 // the monthly summary cycle runs from the 7th to the 6th
 	cyclesToLoad = 6
 	localAddr    = "127.0.0.1:8765" // laptop mode: only reachable from this computer
 	localURL     = "http://localhost:8765"
@@ -88,6 +91,7 @@ type payload struct {
 	Balance   *float64      `json:"balance"`
 	Updated   string        `json:"updated"`
 	CycleDay  int           `json:"cycleDay"`
+	Paydays   []int         `json:"paydays"`
 	CanLogout bool          `json:"canLogout"`
 }
 
@@ -357,7 +361,7 @@ func getData() (*payload, error) {
 		return nil, err
 	}
 
-	out := &payload{Tx: []transaction{}, Updated: now.UTC().Format(time.RFC3339), CycleDay: payDay}
+	out := &payload{Tx: []transaction{}, Updated: now.UTC().Format(time.RFC3339), CycleDay: payDay, Paydays: paydays}
 	list, _ := st["transactions"].([]any)
 	for _, item := range list {
 		t := obj(item)

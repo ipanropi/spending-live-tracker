@@ -6,15 +6,15 @@ One 6.7 MB file. Double-click it, and the dashboard opens in your browser. Press
 
 ## What it shows
 
-It works best if Wise is your spending wallet: on payday (the 7th), move your spending money into Wise. Your Wise balance is then what's left until the next payday.
+It works best if Wise is your spending wallet: on each payday (the 7th and the 22nd), move your spending money into Wise. Your Wise balance is then what's left until the next payday.
 
-- What's left until payday, and what that comes to per day and per week
-- Spent since payday, and spent this week (Monday to Sunday)
+- What's left until the next payday, and what that comes to per day and per week
+- Spent this month (7th to 6th), and spent this week (Monday to Sunday)
 - Spending by category with percentages
 - Your top 5 places
-- Every transaction in the pay cycle (7th to 6th). Pick an earlier cycle to look back.
+- Every transaction in the month. Pick an earlier month to look back.
 
-The payday is `payDay` in `main.go`.
+Paydays are `paydays` in `main.go`. The month starts on `payDay`.
 
 ## Setup
 

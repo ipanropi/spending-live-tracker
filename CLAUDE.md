@@ -6,7 +6,11 @@ Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his 
 
 Focus is **tracking**, not budgeting: a quick "where am I right now" view. Deeper monthly analysis is meant to happen with AI, not on the dashboard.
 
-**Money model (agreed with Irfan):** Wise is his spending wallet. Paydays are the 7th and the 22nd. He tops up Wise with his spending money on payday, so **the Wise balance is what's left**, with no budget numbers to configure. A pay cycle runs from the 7th to the 6th (`payDay` in `main.go`). Weeks are normal calendar weeks, Monday to Sunday, and don't follow the cycle. "Per day" divides the balance by the days left until the next 7th, which reads low until a 22nd top-up lands. That's accepted as erring on the safe side.
+**Money model (agreed with Irfan):** Wise is his spending wallet. Paydays are the 7th and the 22nd. He tops up Wise with his spending money on both paydays, so **the Wise balance is what's left**, with no budget numbers to configure. There are two horizons:
+- **"Left" and the per-day and per-week pace** count down to the next payday, whichever of the 22nd or the 7th comes first (`paydays` in `main.go`, sent to the page). On a payday itself, the countdown goes to the following one, because he tops up that day.
+- **The summary** (spent, categories, places, transactions, cycle picker) uses a monthly cycle from the 7th to the 6th (`payDay`).
+
+Weeks are normal calendar weeks, Monday to Sunday, and don't follow either.
 
 ## Status (2026-11-08)
 
@@ -60,7 +64,7 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **Balance** comes from `endOfStatementBalance`.
 - **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
   1. A **pay-cycle picker** ("7 Nov – 6 Dec").
-  2. For the current cycle only, a hero card, **Left until payday**, showing the Wise balance with "about RM X a day · RM Y a week · N days to go" (the week figure is hidden under 7 days), and a **Spent this week** card (since Monday).
+  2. For the current cycle only, a hero card, **Left until payday, 22 Nov**, showing the Wise balance with "about RM X a day · RM Y a week · N days to go" until the next payday (`nextPayday()`; the week figure is hidden under 7 days), and a **Spent this week** card (since Monday).
   3. A **Spent** card for the cycle, with a per-day average.
   4. **By category** with percentages.
   5. **Top places**, top 5.
