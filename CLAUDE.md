@@ -72,8 +72,15 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 
      Only the spent-this-month card shows for past cycles. Per week was dropped at his request. Layout: on a laptop, the hero takes the full width and the other three sit in a row. On a phone, the hero is full width, per day and this week sit side by side, and this month is full width (class `wide`). `fitNumbers()` shrinks a number only when it would overflow its card, for example per day the day before payday on a 360px phone. Test at 360px with four-digit amounts after any layout change.
   3. **By category** with percentages.
-  4. **Top places**, top 5, with "×N" only when N > 1.
-  5. The **transactions** list: name, then "date · category" in small text, then the amount.
+  4. **Top places**, with "×N" only when N > 1.
+  5. The **transactions**: name, then "date · category" in small text, then the amount.
+
+  **Previews and full views.** Items 3–5 show their top 5 on the dashboard, with a "+N more" line when there are more. Tapping a card (it has a CSS-drawn chevron) opens a full-screen view (`#sheet`, built from `SHEETS` with the data in `VIEW`):
+  - **By category:** each category is a `<details>` dropdown showing "N payments" and its share. Opening one lists its places, highest first, with ×frequency.
+  - **All places:** every place, highest first, with ×frequency and its category.
+  - **All transactions:** every row, with weekday, date and time, category, and Wise's note. Boilerplate "Card transaction of …" notes are hidden.
+
+  Opening a view pushes a history entry, so the Android back gesture, the ‹ button and Escape all close it without leaving the app. Irfan asked for this tap-to-see-all behaviour and for category dropdowns sorted highest to lowest with frequency.
 
   Past cycles show only the spent card, categories, places and transactions. Top-ups show in the list as "Money in" but don't count as spending. All text is HTML-escaped.
 - **Errors** are returned as `{"error": "..."}` with HTTP 502 and shown in a red box on the page.
