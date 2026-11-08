@@ -1,5 +1,7 @@
 # Spending Tracker
 
+> **New: a native app for Android, Windows and macOS** lives in [`app/`](app/README.md). It talks to Wise directly from each device, so there's no server to host. The Go app below is the original laptop and website version, and stays until the native app has been tested with a real Wise token.
+
 A small app that shows where your money goes, using live data from your Wise MYR account. Run it on your laptop, or host it as a private website and use it from your phone and other computers.
 
 One 6.7 MB file. Double-click it, and the dashboard opens in your browser. Press **Update** to pull your latest transactions from Wise.

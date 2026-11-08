@@ -2,6 +2,8 @@
 
 ## What this is
 
+**There are two versions.** `app/` is the **native Flutter app** (Android, Windows, macOS), which is where work is heading: Irfan asked for one native codebase, lightweight and fast. The Go app at the repo root is the original laptop and hosted-website version. It stays until the Flutter app has worked with a real Wise token; after that, it can be retired. Both share the same money model and dashboard design, described below.
+
 Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser. It runs either on his laptop or, in hosted mode, as a private password-protected website for his other devices (Android, Windows, sometimes a Mac). It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
 
 Focus is **tracking**, not budgeting: a quick "where am I right now" view. Deeper monthly analysis is meant to happen with AI, not on the dashboard.
@@ -87,7 +89,65 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
   Past cycles show only the spent card, categories, places and transactions. Top-ups show in the list as "Money in" but don't count as spending. All text is HTML-escaped.
 - **Errors** are returned as `{"error": "..."}` with HTTP 502 and shown in a red box on the page.
 
-## Build, run, test
+## The Flutter app (`app/`)
+
+**Status (2026-11-08):** built and tested here (`flutter analyze` clean, 65 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
+
+**Why Flutter:** it was chosen over Compose Multiplatform, React Native, .NET MAUI, Tauri and Rust (Slint). It has the most mature single codebase across Android, Windows and macOS, compiles AOT, and Dart is close to TS and Kotlin. Rust was rejected for this app: a thin Android ecosystem (secure storage, widgets) and a steep curve for no felt speed gain.
+
+**Kept lightweight on purpose:**
+- **Runtime plugins:** only `http`, `flutter_secure_storage` and `path_provider`.
+- **No state-management package:** a `ChangeNotifier` plus an `InheritedNotifier` (`AppScope`).
+- **No `intl`:** formatting is hand-rolled in `domain/format.dart`.
+- **No bundled fonts:** each platform's system font is used.
+- **Icons:** Material icons only, which are tree-shaken (1.6 MB → 9 KB).
+- **No images in the app:** `AppMark` is drawn with `CustomPaint`.
+
+Release builds use `--obfuscate --split-debug-info`, and Android ships one APK per CPU type.
+
+**Structure:** `lib/src/domain/` is pure Dart:
+- money is held as integer **sen** (cents);
+- the parsing is loose, like the Go version;
+- cycles, categories, summaries and formatting are all here.
+
+`lib/src/data/` holds the Wise client (statement JSON is parsed with `compute`, off the UI thread), `TokenStore`, `StatementCache` and `FakeSource`. `lib/src/app_controller.dart` holds the state. `lib/src/ui/` holds the theme, widgets, dashboard, detail pages, setup and settings. See `app/README.md`.
+
+**Behaviour:**
+- **Cache first:** it opens instantly with the cached statement (`statement.json` in the app support directory, written to a temp file and renamed), then refreshes.
+- **Refreshing:** on launch, on resume when the data is over 5 minutes old (`AppLifecycleListener`), by pull-to-refresh, with the ↻ button, or with F5 / Ctrl+R / Cmd+R.
+- **Errors:** if a refresh fails, the old data stays and a red notice appears. A rejected token offers "Update token".
+- **Full lists:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
+- **Number fitting:** big numbers use `FittedBox(scaleDown)`, the Flutter equivalent of `fitNumbers()`.
+
+**Platform details that matter:**
+- **Android:**
+  - The release manifest has `INTERNET`. Flutter only adds it for debug, so without it a release build can't reach Wise.
+  - `allowBackup=false`: Keystore-wrapped data can't be restored on another device.
+  - The launch and Android 12+ splash screens are dark, with no white flash.
+  - minSdk is 24.
+  - Adaptive and monochrome icons.
+  - Edge-to-edge drawing with light system-bar icons (`AnnotatedRegion` in `app.dart`).
+- **macOS:** `com.apple.security.network.client` is in both entitlements files; the sandbox blocks networking without it. `TokenStore` uses `MacOsOptions(usesDataProtectionKeychain: false)`, so no Keychain Sharing entitlement is needed. That entitlement would tie an unsigned build to the Mac that built it.
+- **Windows:** the exe is `SpendingTracker.exe` with the title "Spending Tracker". `flutter_secure_storage_windows` needs the VS ATL component, which GitHub's Windows runner has.
+- **Android signing:** `android/app/build.gradle.kts` signs with `android/key.properties` if it exists. CI writes that file from the `ANDROID_KEYSTORE_*` secrets. Otherwise it falls back to the debug key, and then a new APK can't update an old one. Irfan hasn't added the secrets yet.
+
+**CI** is `.github/workflows/app.yml`:
+- **Every run:** analyze, test and a format check.
+- **Pushes to `main` and manual runs:** an Android APK per CPU type, and a Windows zip.
+- **macOS:** only on `v*` tags and manual runs, because macOS minutes cost 10× on private repos.
+- **Tags:** also create a GitHub release.
+
+The Go workflow (`build.yml`) ignores changes under `app/`.
+
+**Testing here:**
+- **Install the Flutter SDK:** this sandbox doesn't keep it. Download it to `/home/user/sdk/flutter` (from `storage.googleapis.com/flutter_infra_release`; pub.dev is reachable).
+- **Run the checks:** `flutter analyze` and `flutter test` in `app/`.
+- **Widget tests:** set `WidgetController.hitTestWarningShouldBeFatal = true`, and scroll with `tapVisible()` before tapping.
+- **Screenshots:** copy `app/` to a scratch folder, run `flutter create --platforms web .` there, and build with `--dart-define=FAKE_DATA=true --no-web-resources-cdn`. Don't commit a web folder: Irfan doesn't want a web app. Add `SemanticsBinding.instance.ensureSemantics()` in the copy to drive it through the accessibility tree.
+
+**Categories:** the same rules as the Go app, plus canteen keywords (kantin, canteen, warung, gerai, medan selera), because Irfan eats at his workplace canteen and those payments were landing in "Other". The Go `categories` list has them too.
+
+## Build, run, test (Go app)
 
 ```bash
 # Windows exe (what Irfan uses)

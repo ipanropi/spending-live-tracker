@@ -1,0 +1,17 @@
+# Launcher icons. Regenerate with: dart run flutter_launcher_icons
+# The source images in assets/icon/ are only used here; they're not bundled into the app.
+flutter_launcher_icons:
+  image_path: assets/icon/icon.png
+  android: true
+  min_sdk_android: 24
+  adaptive_icon_background: "#2563EB"
+  adaptive_icon_foreground: assets/icon/foreground.png
+  adaptive_icon_monochrome: assets/icon/monochrome.png
+  ios: false
+  windows:
+    generate: true
+    image_path: assets/icon/icon.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/icon/macos.png

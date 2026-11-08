@@ -63,9 +63,9 @@ var categories = []struct {
 	Name  string
 	Words []string
 }{
-	{"Food & Drinks", []string{"grabfood", "foodpanda", "shopeefood", "restaurant", "restoran", "cafe", "kopitiam",
-		"mamak", "nasi", "mcdonald", "kfc", "starbucks", "zus", "tealive", "subway", "domino", "pizza", "bakery",
-		"texas chicken"}},
+	{"Food & Drinks", []string{"grabfood", "foodpanda", "shopeefood", "kantin", "canteen", "restaurant", "restoran",
+		"cafe", "kopitiam", "mamak", "warung", "gerai", "medan selera", "nasi", "mcdonald", "kfc", "starbucks", "zus",
+		"tealive", "subway", "domino", "pizza", "bakery", "texas chicken"}},
 	{"Groceries", []string{"99 speedmart", "mydin", "lotus", "aeon", "jaya grocer", "giant", "econsave",
 		"village grocer", "7-eleven", "7 eleven", "family mart", "familymart", "kk mart"}},
 	{"Transport", []string{"grab", "petronas", "shell", "petron", "caltex", "bhpetrol", "touch n go", "parking",

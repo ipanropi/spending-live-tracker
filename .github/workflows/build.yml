@@ -1,9 +1,11 @@
 name: Build
 
+# The Go laptop app. Changes that only touch the Flutter app (app/) don't rebuild it.
 on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore: ["app/**", ".github/workflows/app.yml"]
   workflow_dispatch:
 
 permissions:
