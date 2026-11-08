@@ -27,21 +27,24 @@
   #error { display:none; background:#2a1515; color:#fca5a5; border:1px solid #5c2424; padding:12px; border-radius:var(--radius); margin-bottom:12px; font-size:14px; }
 
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; min-width:0; }
-  .overview { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:12px; }
-  .overview .hero { grid-column:span 2; grid-row:span 2; display:flex; flex-direction:column; justify-content:center; }
+  .overview { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
   .overview.past { grid-template-columns:1fr; }
+  .overview.past .card { grid-column:1 / -1; }
   .label { color:var(--muted); font-size:13px; }
-  .big { font-size:40px; font-weight:700; margin-top:4px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; }
+  .big { font-size:clamp(30px, 9vw, 40px); font-weight:700; margin-top:4px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; }
   .value { font-size:26px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
   .sub { color:var(--muted); font-size:13px; margin-top:6px; }
   .good { color:var(--good); } .spend { color:var(--spend); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
   @media (max-width:800px) {
+    /* Phone: "left", then a slim per-day row, then the two spent cards side by side */
     .overview { grid-template-columns:1fr 1fr; }
-    .overview .hero { grid-column:1 / -1; grid-row:auto; }
+    .overview .hero, .overview .perday { grid-column:1 / -1; }
+    .overview .perday { display:flex; justify-content:space-between; align-items:center; }
+    .overview .perday .value { margin-top:0; }
     .grid { grid-template-columns:1fr; }
   }
-  @media (max-width:420px) { .big { font-size:34px; } .value { font-size:22px; } }
+  @media (max-width:420px) { .value { font-size:22px; } }
 
   h2 { font-size:15px; margin:0 0 4px; }
   .row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px; }
@@ -77,8 +80,7 @@
       <div class="big good" id="left">–</div>
       <div class="sub" id="daysLeft"></div>
     </div>
-    <div class="card now"><div class="label">Per day</div><div class="value" id="perDay">–</div></div>
-    <div class="card now"><div class="label">Per week</div><div class="value" id="perWeek">–</div></div>
+    <div class="card now perday"><div class="label">Per day</div><div class="value" id="perDay">–</div></div>
     <div class="card"><div class="label" id="spentLabel">Spent this month</div><div class="value spend" id="spent">–</div><div class="sub" id="spentSub"></div></div>
     <div class="card now"><div class="label">Spent this week</div><div class="value spend" id="week">–</div></div>
   </div>
@@ -172,7 +174,7 @@ function render() {
   const out = tx.filter(t => t.amount < 0);
   const spent = spentIn(out);
 
-  // Overview: "left", per day/week and "this week" only make sense for the month you're in now
+  // Overview: "left", per day and "this week" only make sense for the month you're in now
   $('overview').classList.toggle('past', !isCurrent);
   document.querySelectorAll('#overview .now').forEach(el => { el.hidden = !isCurrent; });
   if (isCurrent) renderNow(now);
@@ -222,10 +224,8 @@ function renderNow(now) {
   $('left').textContent = bal == null ? '–' : (bal < 0 ? '−' : '') + rm(Math.abs(bal));
   $('left').className = 'big ' + (bal != null && bal < 0 ? 'spend' : 'good');
   $('daysLeft').textContent = daysLeft + (daysLeft === 1 ? ' day' : ' days');
-  // What you can spend per day and per week until payday. With under a week to go, a week's worth is all of it.
-  const perDay = bal > 0 ? bal / daysLeft : 0;
-  $('perDay').textContent = bal == null ? '–' : rm(perDay);
-  $('perWeek').textContent = bal == null ? '–' : rm(Math.min(Math.max(bal, 0), perDay * 7));
+  // What you can spend per day until payday
+  $('perDay').textContent = bal == null ? '–' : rm(bal > 0 ? bal / daysLeft : 0);
 
   const monday = startOfDay(now);
   monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7); // weeks run Monday to Sunday

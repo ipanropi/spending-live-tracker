@@ -64,8 +64,10 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **Balance** comes from `endOfStatementBalance`.
 - **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
   1. A **pay-cycle picker** ("7 Nov – 6 Dec").
-  2. For the current cycle only: a hero card, **Left until 22 Nov**, with the Wise balance in green and "N days" under it (counting down to `nextPayday()`), plus separate small cards for **Per day** and **Per week** (balance ÷ days left, ×7 for the week, capped at the balance when under a week remains) and **Spent this week** (since Monday). Irfan wanted per day and per week as their own cards, not one combined line.
-  3. A **Spent this month** card for the cycle, with "avg RM X/day". On a phone, the four small cards form a 2×2 grid under the hero. On a laptop, the hero takes the left half and the four cards sit to its right.
+  2. For the current cycle only: a hero card, **Left until 22 Nov**, with the Wise balance in green and "N days" under it (counting down to `nextPayday()`), a **Per day** card (balance ÷ days left), and a **Spent this week** card (since Monday). Irfan wanted per day as its own card and asked to drop per week.
+  3. A **Spent this month** card for the cycle, with "avg RM X/day".
+
+  Layout: on a laptop, the four cards sit in one row (2fr 1fr 1fr 1fr). On a phone, the hero is full width, Per day is a slim full-width row with the label left and the amount right, and the two spent cards sit side by side. A narrower per-day card wrapped "RM 127.14" onto two lines at 360px, so test realistic balances (around RM 1,780) at 360px after layout changes.
   4. **By category** with percentages.
   5. **Top places**, top 5, with "×N" only when N > 1.
   6. The **transactions** list: name, then "date · category" in small text, then the amount.
