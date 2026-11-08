@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_controller.dart';
 import '../data/wise_api.dart';
-import '../domain/cycles.dart';
 import '../domain/format.dart';
 import '../domain/models.dart';
 import '../domain/summary.dart';
@@ -47,26 +48,29 @@ class DashboardPage extends StatelessWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: EdgeInsets.fromLTRB(side, 16, side - 8, 0),
+                    padding: EdgeInsets.fromLTRB(side, Space.s, side - Space.s, 0),
                     sliver: const SliverToBoxAdapter(child: _Header()),
                   ),
                   if (c.error != null)
                     SliverPadding(
-                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      padding: EdgeInsets.fromLTRB(side, Space.s, side, 0),
                       sliver: SliverToBoxAdapter(child: _ErrorNotice(error: c.error!)),
                     ),
-                  if (summary == null)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: c.refreshing ? const _Loading() : const SizedBox.shrink(),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(side, context.gap, side, 32 + bottom),
-                      sliver: SliverToBoxAdapter(
-                        child: _Body(summary: summary, now: c.now),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(side, context.gap, side, Space.xxl + bottom),
+                    sliver: SliverToBoxAdapter(
+                      // A short fade when switching months, so the change is noticed.
+                      child: AnimatedSwitcher(
+                        duration: context.reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+                        child: summary != null
+                            ? KeyedSubtree(
+                                key: ValueKey(summary.start),
+                                child: _Body(summary: summary, now: c.now),
+                              )
+                            : (c.refreshing ? const _LoadingBody() : const SizedBox.shrink()),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -77,9 +81,29 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-/// The month picker, when the data was last updated, and the refresh and settings buttons.
-class _Header extends StatelessWidget {
+/// The month picker, how fresh the data is, and the refresh and settings buttons.
+class _Header extends StatefulWidget {
   const _Header();
+
+  @override
+  State<_Header> createState() => _HeaderState();
+}
+
+class _HeaderState extends State<_Header> {
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // "Updated 3 min ago" has to tick on by itself.
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,8 +139,7 @@ class _Header extends StatelessWidget {
     if (c.refreshing) return 'Updating…';
     final fetched = c.statement?.fetchedAt;
     if (fetched == null) return c.error != null ? 'Not updated yet' : '';
-    final sameDay = dateOnly(fetched) == dateOnly(now);
-    return 'Updated ${sameDay ? '' : '${dayMonth(fetched)}, '}${time12(fetched)}';
+    return updatedLabel(fetched, now: now);
   }
 }
 
@@ -132,7 +155,10 @@ class _CyclePicker extends StatelessWidget {
     return PopupMenuButton<DateTime>(
       tooltip: 'Choose month',
       initialValue: selected,
-      onSelected: AppScope.read(context).selectCycle,
+      onSelected: (start) {
+        HapticFeedback.selectionClick();
+        AppScope.read(context).selectCycle(start);
+      },
       position: PopupMenuPosition.under,
       itemBuilder: (_) => [
         for (final start in cycles)
@@ -146,19 +172,19 @@ class _CyclePicker extends StatelessWidget {
             ),
           ),
       ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+      // At least 48dp tall, so it's an easy target for a thumb.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Flexible(
-              child: Text(
+              child: Heading(
                 cycleLabel(selected, now: now),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Palette.text),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Palette.text, height: 1.2),
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: Space.xs),
             const Icon(Icons.expand_more, color: Palette.muted),
           ],
         ),
@@ -167,6 +193,7 @@ class _CyclePicker extends StatelessWidget {
   }
 }
 
+/// What went wrong, why, and what you're looking at meanwhile, with the fix as a button.
 class _ErrorNotice extends StatelessWidget {
   const _ErrorNotice({required this.error});
 
@@ -174,28 +201,76 @@ class _ErrorNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppScope.read(context);
+    final c = AppScope.of(context);
+    final fetched = c.statement?.fetchedAt;
     final badToken = error.kind == WiseErrorKind.badToken;
     return Notice(
-      message: error.message,
+      title: switch (error.kind) {
+        WiseErrorKind.badToken => 'Token not accepted',
+        WiseErrorKind.offline => "Couldn't reach Wise",
+        WiseErrorKind.blocked => 'Wise blocked the request',
+        WiseErrorKind.noBalance => 'No MYR balance found',
+        WiseErrorKind.other => "Couldn't update",
+      },
+      lines: [
+        error.message,
+        if (fetched != null) 'Showing saved data from ${whenLabel(fetched, now: c.now)}',
+      ],
       action: badToken ? 'Update token' : 'Try again',
       onAction: badToken ? () => openSetup(context, replacing: true) : c.refresh,
     );
   }
 }
 
-class _Loading extends StatelessWidget {
-  const _Loading();
+/// The dashboard's shape while the first data loads.
+class _LoadingBody extends StatelessWidget {
+  const _LoadingBody();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final gap = SizedBox(height: context.gap);
+    Widget card(List<Widget> boxes) => Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: boxes),
+    );
+    return Skeleton(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Loading from Wise…', style: Styles.meta),
+          card(const [
+            SkeletonBox(width: 0.6, height: 44),
+            SizedBox(height: Space.m),
+            SkeletonBox(width: 0.4, height: 14),
+            SizedBox(height: Space.s),
+            SkeletonBox(width: 0.3, height: 12),
+          ]),
+          gap,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final i in [0, 1]) ...[
+                  if (i > 0) SizedBox(width: context.gap),
+                  Expanded(
+                    child: card(const [
+                      SkeletonBox(width: 0.7, height: 26),
+                      SizedBox(height: Space.s),
+                      SkeletonBox(width: 0.5, height: 12),
+                    ]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          gap,
+          card([
+            const SkeletonBox(width: 0.35, height: 16),
+            for (var i = 0; i < 3; i++) ...const [
+              SizedBox(height: Space.xl),
+              SkeletonBox(width: 1, height: 14),
+              SizedBox(height: Space.s),
+              SkeletonBox(width: 0.5, height: 10),
+            ],
+          ]),
         ],
       ),
     );
@@ -250,7 +325,7 @@ class _Body extends StatelessWidget {
   Widget _categoriesCard(BuildContext context) => SectionCard(
     title: 'By category',
     total: summary.categories.length,
-    empty: 'No spending yet.',
+    empty: summary.isCurrent ? 'No spending yet this month.' : 'No spending this month.',
     onOpen: () => _open(context, CategoriesPage(summary: summary, label: _label)),
     rows: [
       for (final cat in summary.categories.take(_previewCount))
@@ -265,7 +340,7 @@ class _Body extends StatelessWidget {
   Widget _placesCard(BuildContext context) => SectionCard(
     title: 'Top places',
     total: summary.places.length,
-    empty: 'Nothing yet.',
+    empty: 'No places yet.',
     onOpen: () => _open(context, PlacesPage(summary: summary, label: _label)),
     rows: [
       for (final p in summary.places.take(_previewCount))
@@ -277,8 +352,8 @@ class _Body extends StatelessWidget {
     title: 'Transactions',
     total: summary.transactions.length,
     empty: 'No transactions yet.',
-    onOpen: () => _open(context, TransactionsPage(summary: summary, label: _label)),
-    rows: [for (final t in summary.transactions.take(_previewCount)) TxnRow(txn: t)],
+    onOpen: () => _open(context, TransactionsPage(summary: summary, label: _label, now: now)),
+    rows: [for (final t in summary.transactions.take(_previewCount)) TxnRow(txn: t, now: now)],
   );
 
   void _open(BuildContext context, Widget page) =>
@@ -297,7 +372,7 @@ class _Overview extends StatelessWidget {
   Widget build(BuildContext context) {
     final gap = SizedBox.square(dimension: context.gap);
     final month = StatCard(
-      value: rm(summary.spentCents),
+      cents: summary.spentCents,
       color: Palette.spend,
       lines: [
         summary.isCurrent ? 'spent this month' : 'spent in ${cycleLabel(summary.start, now: now)}',
@@ -310,12 +385,12 @@ class _Overview extends StatelessWidget {
     final balance = today.balanceCents;
     final hero = StatCard(
       hero: true,
-      value: balance == null ? '–' : rm(balance),
+      cents: balance,
       color: (balance ?? 0) < 0 ? Palette.spend : Palette.good,
       lines: ['left until ${dayMonth(today.nextPayday)}', '${plural(today.daysLeft, 'day')} left'],
     );
-    final perDay = StatCard(value: today.perDayCents == null ? '–' : rm(today.perDayCents!), lines: const ['per day']);
-    final week = StatCard(value: rm(today.weekCents), color: Palette.spend, lines: const ['spent this week']);
+    final perDay = StatCard(cents: today.perDayCents, lines: const ['per day']);
+    final week = StatCard(cents: today.weekCents, color: Palette.spend, lines: const ['spent this week']);
 
     Widget row(List<Widget> cards) => IntrinsicHeight(
       child: Row(
@@ -346,12 +421,14 @@ class _Overview extends StatelessWidget {
 }
 
 /// A transaction row: name and amount, then when, then the category, then a
-/// useful note in the full list.
+/// useful note. Inside a day group, "when" is just the time.
 class TxnRow extends StatelessWidget {
-  const TxnRow({super.key, required this.txn, this.full = false});
+  const TxnRow({super.key, required this.txn, required this.now, this.full = false, this.timeOnly = false});
 
   final Txn txn;
+  final DateTime now;
   final bool full;
+  final bool timeOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +444,11 @@ class TxnRow extends StatelessWidget {
       name: txn.name,
       amount: '${moneyIn ? '+' : ''}${rm(txn.cents.abs())}',
       amountColor: moneyIn ? Palette.good : null,
-      lines: [weekdayDateTime(txn.date), txn.category, if (usefulNote) note],
+      lines: [
+        timeOnly ? time12(txn.date) : whenLabel(txn.date, now: now),
+        txn.category,
+        if (usefulNote) note,
+      ],
     );
   }
 }

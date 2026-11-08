@@ -27,25 +27,52 @@ const RoundedRectangleBorder _shape = RoundedRectangleBorder(borderRadius: corne
 /// Numbers line up in columns.
 const List<FontFeature> tabular = [FontFeature.tabularFigures()];
 
+/// One spacing scale on a 4-point grid, so gaps line up and repeat.
+abstract final class Space {
+  static const double xs = 4;
+  static const double s = 8;
+  static const double m = 12;
+  static const double l = 16;
+  static const double xl = 24;
+  static const double xxl = 32;
+}
+
+/// The type ramp. Big numbers come from [Spacing.heroSize] and [Spacing.statSize];
+/// everything else is one of these, so sizes stay consistent screen to screen.
 abstract final class Styles {
-  static const sectionTitle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.text);
+  /// Screen and sheet titles.
+  static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
+
+  /// Card titles, and day headers in lists.
+  static const sectionTitle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
+
   static const rowName = TextStyle(fontSize: 15, color: Palette.text, height: 1.35);
   static const rowAmount = TextStyle(fontSize: 15, color: Palette.text, fontFeatures: tabular, height: 1.35);
+
+  /// Secondary lines under a row: when, category, how often.
   static const meta = TextStyle(fontSize: 13, color: Palette.muted, height: 1.35);
+
+  /// The phrase under an overview number.
   static const desc = TextStyle(fontSize: 15, color: Palette.text2, height: 1.35);
+
+  /// Extra detail under that phrase.
   static const extra = TextStyle(fontSize: 14, color: Palette.muted, height: 1.35);
+
   static const body = TextStyle(fontSize: 15, color: Palette.text2, height: 1.45);
 }
 
-/// Spacing that adapts to the screen: a little tighter on small phones.
+/// Spacing that adapts to the screen: a little tighter on small phones, roomier on computers.
 extension Spacing on BuildContext {
   double get _width => MediaQuery.sizeOf(this).width;
 
   /// Padding inside cards.
-  double get pad => _width < 420 ? 18 : 22;
+  double get pad => _width < 380 ? Space.l : (_width < 600 ? 20 : Space.xl);
 
   /// Space between cards.
-  double get gap => _width < 420 ? 14 : 16;
+  double get gap => _width < 380 ? Space.m : Space.l;
+
+  /// True when the user asked the system for less motion.
+  bool get reduceMotion => MediaQuery.disableAnimationsOf(this);
 
   /// Side padding that keeps content at most [maxWidth] wide, centred.
   double sidePad(double maxWidth) => math.max(16, (_width - maxWidth) / 2);

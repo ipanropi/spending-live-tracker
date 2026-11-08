@@ -91,7 +91,7 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 
 ## The Flutter app (`app/`)
 
-**Status (2026-11-08):** built and tested here (`flutter analyze` clean, 65 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
+**Status (2026-11-08):** built and tested here (`flutter analyze` clean, 72 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
 
 **Why Flutter:** it was chosen over Compose Multiplatform, React Native, .NET MAUI, Tauri and Rust (Slint). It has the most mature single codebase across Android, Windows and macOS, compiles AOT, and Dart is close to TS and Kotlin. Rust was rejected for this app: a thin Android ecosystem (secure storage, widgets) and a steep curve for no felt speed gain.
 
@@ -119,6 +119,18 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Full lists:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
 - **Number fitting:** big numbers use `FittedBox(scaleDown)`, the Flutter equivalent of `fitNumbers()`.
 
+**UI/UX rules applied (Irfan asked for design principles to be researched and applied; keep them):**
+- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width, and the gap between cards is 12/16. Don't add one-off values.
+- **Type ramp:** `Styles` in `ui/theme.dart`. Big numbers are `MoneyText`: the digits big and "RM" at half size and 70% opacity, so the eye lands on the value.
+- **Number line:** overview numbers sit in a fixed-height line, `SizedBox` plus `FittedBox`, with text scaling capped at 1.3× for the numbers only. This keeps cards that share a height (`IntrinsicHeight`) from overflowing at 200% text. All other text scales fully.
+- **48dp targets** (Fitts's law, Material): includes the month picker.
+- **Visibility of status:** `updatedLabel()` shows "Updated just now / 5 min ago / 9:05 am / Yesterday, 9:30 pm" and refreshes itself every 30 s.
+- **Perceived speed:** the first load shows a `Skeleton` in the dashboard's shape, not a spinner. It stays still under "reduce motion", as do the dropdown and month fade (`context.reduceMotion`). The header's refresh spinner keeps moving as essential progress.
+- **Recognition over recall:** `dayLabel()` and `whenLabel()` give "Today, 2:15 pm" and "Yesterday". All transactions are grouped by day under "Today · RM 24.60" headers, so rows show only the time (Gestalt proximity).
+- **Errors:** `Notice` shows a title ("Couldn't reach Wise"), the reason, and "Showing saved data from …", one per line, with the fix as a button.
+- **Accessibility:** card titles, day headers and the month are `Heading`s (screen-reader headings). Overview cards read as one sentence. Tests run at 200% text on three screen sizes.
+- **Native feel (Jakob's law):** a selection haptic on month change and category expand, a short fade when switching months, and the system back gesture.
+
 **Platform details that matter:**
 - **Android:**
   - The release manifest has `INTERNET`. Flutter only adds it for debug, so without it a release build can't reach Wise.
@@ -132,7 +144,7 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Android signing:** `android/app/build.gradle.kts` signs with `android/key.properties` if it exists. CI writes that file from the `ANDROID_KEYSTORE_*` secrets. Otherwise it falls back to the debug key, and then a new APK can't update an old one. Irfan hasn't added the secrets yet.
 
 **CI** is `.github/workflows/app.yml`:
-- **Every run:** analyze, test and a format check.
+- **Every run:** analyze, test and a format check. Windows and macOS builds were verified green in run 42467360054. Android failed there on a GitHub 504 while downloading Gradle, so the wrapper now uses the smaller `-bin` distribution.
 - **Pushes to `main` and manual runs:** an Android APK per CPU type, and a Windows zip.
 - **macOS:** only on `v*` tags and manual runs, because macOS minutes cost 10× on private repos.
 - **Tags:** also create a GitHub release.

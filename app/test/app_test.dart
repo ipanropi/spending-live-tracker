@@ -5,6 +5,7 @@ import 'package:spending_tracker/src/app_controller.dart';
 import 'package:spending_tracker/src/data/fake_source.dart';
 import 'package:spending_tracker/src/data/wise_api.dart';
 import 'package:spending_tracker/src/ui/app.dart';
+import 'package:spending_tracker/src/ui/widgets.dart';
 
 import 'helpers.dart';
 
@@ -24,23 +25,34 @@ void main() {
 
   late ScriptedSource source;
   late MemoryTokens tokens;
+  late DateTime now;
 
-  Future<void> pumpApp(WidgetTester tester, Size size, {String? token = 'good', double textScale = 1}) async {
+  Future<void> pumpApp(
+    WidgetTester tester,
+    Size size, {
+    String? token = 'good',
+    double textScale = 1,
+    Duration fetchDelay = Duration.zero,
+    bool reduceMotion = false,
+    bool settle = true,
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    if (reduceMotion) {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+        disableAnimations: true,
+      );
+    }
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    now = testNow;
     tokens = MemoryTokens(token);
-    source = ScriptedSource(FakeSource(clock: () => testNow, delay: Duration.zero));
-    final controller = AppController(
-      sourceFor: (_) => source,
-      tokens: tokens,
-      cache: MemoryCache(),
-      clock: () => testNow,
-    );
+    source = ScriptedSource(FakeSource(clock: () => now, delay: fetchDelay));
+    final controller = AppController(sourceFor: (_) => source, tokens: tokens, cache: MemoryCache(), clock: () => now);
     await tester.pumpWidget(SpendingApp(controller: controller));
-    await tester.pumpAndSettle();
+    if (settle) await tester.pumpAndSettle();
   }
 
   for (final MapEntry(key: name, value: size) in sizes.entries) {
@@ -48,6 +60,7 @@ void main() {
       testWidgets('dashboard shows the numbers, number first', (tester) async {
         await pumpApp(tester, size);
         expect(find.text('7 Nov – 6 Dec'), findsOneWidget);
+        expect(find.text('Updated just now'), findsOneWidget);
         expect(find.text('RM 1,780.00'), findsOneWidget);
         expect(find.text('left until 22 Nov'), findsOneWidget);
         expect(find.text('14 days left'), findsOneWidget);
@@ -60,6 +73,7 @@ void main() {
         expect(find.text('By category'), findsOneWidget);
         expect(find.text('Top places'), findsOneWidget);
         expect(find.text('Transactions'), findsOneWidget);
+        expect(find.text('Today, 6:10 pm'), findsOneWidget); // recent days by name
       });
 
       testWidgets('categories open a full view with dropdowns of places', (tester) async {
@@ -79,12 +93,18 @@ void main() {
         expect(find.text('RM 1,780.00'), findsOneWidget);
       });
 
-      testWidgets('all transactions show when, category and useful notes on their own lines', (tester) async {
+      testWidgets('all transactions are grouped by day, with the time, category and notes on their own lines', (
+        tester,
+      ) async {
         await pumpApp(tester, size);
         await tapVisible(tester, find.text('Transactions'));
         expect(find.text('All transactions'), findsOneWidget);
         expect(find.text('7 Nov – 6 Dec · 6 transactions'), findsOneWidget);
-        expect(find.text('Sun, 8 Nov, 6:10 pm'), findsOneWidget);
+        expect(find.text('Today'), findsOneWidget);
+        expect(find.text('RM 24.60'), findsOneWidget); // spent today
+        expect(find.text('Yesterday'), findsOneWidget);
+        expect(find.text('RM 61.90'), findsOneWidget); // spent yesterday
+        expect(find.text('6:10 pm'), findsOneWidget); // just the time inside a day
         expect(find.text('Transport'), findsWidgets);
         expect(find.textContaining('Card transaction of'), findsNothing); // boilerplate hidden
       });
@@ -100,11 +120,15 @@ void main() {
         expect(find.text('per day'), findsNothing);
       });
 
-      testWidgets('large text still fits', (tester) async {
-        await pumpApp(tester, size, textScale: 1.5);
+      testWidgets('text at 200% still fits everywhere', (tester) async {
+        await pumpApp(tester, size, textScale: 2);
         expect(find.text('RM 1,780.00'), findsOneWidget);
         await tapVisible(tester, find.text('By category'));
         await tapVisible(tester, find.text('Food & Drinks'));
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await tapVisible(tester, find.text('Transactions'));
+        expect(find.text('Today'), findsOneWidget);
       });
     });
   }
@@ -128,9 +152,56 @@ void main() {
     source.failWith = const WiseException(WiseErrorKind.badToken, 'Wise rejected the token.');
     await tester.tap(find.byTooltip('Update (F5)'));
     await tester.pumpAndSettle();
+    expect(find.text('Token not accepted'), findsOneWidget);
     expect(find.text('Wise rejected the token.'), findsOneWidget);
+    expect(find.text('Showing saved data from Today, 3:00 pm'), findsOneWidget);
     expect(find.text('Update token'), findsOneWidget);
     expect(find.text('RM 1,780.00'), findsOneWidget);
+  });
+
+  testWidgets('the first load shows a skeleton of the dashboard, then the numbers', (tester) async {
+    await pumpApp(tester, sizes['phone']!, fetchDelay: const Duration(seconds: 2), settle: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.bySemanticsLabel('Loading your data'), findsOneWidget);
+    expect(find.text('RM 1,780.00'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Loading your data'), findsNothing);
+    expect(find.text('RM 1,780.00'), findsOneWidget);
+  });
+
+  // The skeleton's pulse: its opacity right now.
+  double skeletonOpacity(WidgetTester tester) => tester
+      .widget<FadeTransition>(find.descendant(of: find.byType(Skeleton), matching: find.byType(FadeTransition)))
+      .opacity
+      .value;
+
+  testWidgets('the skeleton pulses, but stays still with reduced motion', (tester) async {
+    await pumpApp(tester, sizes['phone']!, fetchDelay: const Duration(seconds: 5), settle: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    final a = skeletonOpacity(tester);
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(skeletonOpacity(tester), isNot(a));
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('with reduced motion, the skeleton stays still', (tester) async {
+    await pumpApp(tester, sizes['phone']!, fetchDelay: const Duration(seconds: 5), reduceMotion: true, settle: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(skeletonOpacity(tester), 1);
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(skeletonOpacity(tester), 1);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('"Updated" keeps itself current', (tester) async {
+    await pumpApp(tester, sizes['phone']!);
+    expect(find.text('Updated just now'), findsOneWidget);
+    now = testNow.add(const Duration(minutes: 5));
+    await tester.pump(const Duration(seconds: 31));
+    expect(find.text('Updated 5 min ago'), findsOneWidget);
   });
 
   testWidgets('F5 and Ctrl+R refresh on desktop', (tester) async {

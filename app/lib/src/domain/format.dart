@@ -1,6 +1,6 @@
 /// Small formatting helpers, kept in-house instead of pulling in `intl` so the
 /// app stays small. Everything reads the way the dashboard shows it:
-/// "RM 1,234.56", "8 Nov", "Sun, 8 Nov, 2:15 pm".
+/// "RM 1,234.56", "8 Nov", "Today, 2:15 pm", "Updated 3 min ago".
 library;
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -8,6 +8,13 @@ const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /// Formats sen as ringgit: 123456 → "RM 1,234.56". Negative amounts get a real minus sign.
 String rm(int cents) {
+  final (sign, number) = rmParts(cents);
+  return '${sign}RM $number';
+}
+
+/// An amount split for display, so "RM" can be drawn smaller than the digits:
+/// -123456 → ('−', '1,234.56').
+(String, String) rmParts(int cents) {
   final abs = cents.abs();
   final whole = (abs ~/ 100).toString();
   final grouped = StringBuffer();
@@ -16,7 +23,7 @@ String rm(int cents) {
     grouped.write(whole[i]);
   }
   final sen = (abs % 100).toString().padLeft(2, '0');
-  return '${cents < 0 ? '−' : ''}RM $grouped.$sen';
+  return (cents < 0 ? '−' : '', '$grouped.$sen');
 }
 
 /// "8 Nov"
@@ -28,8 +35,28 @@ String time12(DateTime d) {
   return '$h:${d.minute.toString().padLeft(2, '0')} ${d.hour < 12 ? 'am' : 'pm'}';
 }
 
-/// "Sun, 8 Nov, 2:15 pm"
-String weekdayDateTime(DateTime d) => '${_weekdays[d.weekday - 1]}, ${dayMonth(d)}, ${time12(d)}';
+/// "Today", "Yesterday", or "Fri, 6 Nov" (with the year when it isn't this year).
+/// Recent days are easier to recognise by name than by date.
+String dayLabel(DateTime d, {required DateTime now}) {
+  final days = _calendarDays(d, now);
+  if (days == 0) return 'Today';
+  if (days == 1) return 'Yesterday';
+  final label = '${_weekdays[d.weekday - 1]}, ${dayMonth(d)}';
+  return d.year == now.year ? label : '$label ${d.year}';
+}
+
+/// "Today, 2:15 pm", "Yesterday, 9:05 am", "Fri, 6 Nov, 2:15 pm"
+String whenLabel(DateTime d, {required DateTime now}) => '${dayLabel(d, now: now)}, ${time12(d)}';
+
+/// How fresh the data is: "Updated just now", "Updated 5 min ago", then the
+/// time ("Updated 9:05 am") and, on earlier days, the day too.
+String updatedLabel(DateTime fetched, {required DateTime now}) {
+  final minutes = now.difference(fetched).inMinutes;
+  if (minutes < 1) return 'Updated just now';
+  if (minutes < 60) return 'Updated $minutes min ago';
+  if (_calendarDays(fetched, now) == 0) return 'Updated ${time12(fetched)}';
+  return 'Updated ${whenLabel(fetched, now: now)}';
+}
 
 /// "1 time", "3 times"
 String plural(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
@@ -40,3 +67,6 @@ String cycleLabel(DateTime start, {required DateTime now}) {
   final year = last.year != now.year ? ' ${last.year}' : '';
   return '${dayMonth(start)} – ${dayMonth(last)}$year';
 }
+
+int _calendarDays(DateTime from, DateTime to) =>
+    DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
