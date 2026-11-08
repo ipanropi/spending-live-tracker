@@ -19,7 +19,7 @@ Focus is **tracking** (where money goes, percentages, what's left this month), n
 | File | Purpose |
 |---|---|
 | `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
-| `web/index.html` | Dashboard UI. Vanilla JS plus Chart.js 4.4.1 from cdnjs. If Chart.js can't load, the page skips the charts and still shows the numbers. |
+| `web/index.html` | Dashboard UI. Vanilla JS plus Chart.js 4.4.1 from cdnjs. If Chart.js can't load, the page skips the charts and still shows the numbers. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category colours are a fixed 8-slot order checked for colour-blind separation on the `#1a1a19` card, assigned by amount rank so neighbours in the doughnut are neighbours in the list. Categories past 8 share one grey. Don't cycle colours or pick them ad hoc. |
 | `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
 | `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
 | `.github/workflows/build.yml` | Builds the Windows exe on every push to `main` (as an artifact) and on `v*` tags (as a release). Verified on `main`; the tag/release path is untested. |
@@ -108,6 +108,7 @@ When scripting parallel curls against it, `wait` on their PIDs only. A bare `wai
 - **Go instead of Python.** Irfan asked for something fast and lightweight. The result is a single exe with no runtime.
 - **A hosted website, not a native app, for other devices.** He uses Android and Windows, and sometimes a Mac. A website (with a manifest, so it installs to the home screen) covers all three from one build. A native app would mean three builds and Mac signing hassles. Tailscale to the laptop was rejected because the laptop would have to stay on.
 - **A login page, not HTTP basic auth.** The Mac may be shared, and basic auth has no real logout.
+- **Plain HTML, no frontend framework for now.** Irfan chose this. If the UI grows a lot, the fallback plan is React + Vite (he knows React) embedded with `go:embed`, or templ + htmx to stay all-Go. Skip Go WebAssembly: the download is too big for phones.
 
 ## Ideas not built (only build if Irfan asks)
 

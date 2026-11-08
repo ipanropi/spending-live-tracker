@@ -7,25 +7,26 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#f6f7f9">
+<meta name="theme-color" content="#111110">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --out:#dc2626; --in:#16a34a; }
+  :root { color-scheme:dark; --bg:#111110; --card:#1a1a19; --input:#222220; --text:#f0efec; --muted:#a09f97; --line:#2f2f2c;
+          --accent:#2563eb; --out:#f87171; --in:#4ade80; --radius:4px; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
   .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
   header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:20px; }
   h1 { font-size:22px; margin:0; }
   .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  select, button { font:inherit; font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--text); }
+  select, button { font:inherit; font-size:14px; padding:8px 12px; border-radius:var(--radius); border:1px solid var(--line); background:var(--input); color:var(--text); }
   button { background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:600; }
   button:disabled { opacity:.6; cursor:default; }
-  button.plain { background:#fff; color:var(--text); border:1px solid var(--line); font-weight:500; }
+  button.plain { background:var(--input); color:var(--text); border:1px solid var(--line); font-weight:500; }
   #logout { margin:0; }
   #status { color:var(--muted); font-size:13px; }
-  #error { display:none; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:8px; margin-bottom:12px; font-size:14px; }
+  #error { display:none; background:#2a1515; color:#fca5a5; border:1px solid #5c2424; padding:12px; border-radius:var(--radius); margin-bottom:12px; font-size:14px; }
   .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:12px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; min-width:0; }
   .label { color:var(--muted); font-size:13px; }
   .value { font-size:26px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
   .sub { color:var(--muted); font-size:12px; margin-top:4px; }
@@ -37,7 +38,7 @@
   th { color:var(--muted); font-weight:500; font-size:12px; }
   .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .out { color:var(--out); } .in { color:var(--in); }
-  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar { height:6px; background:var(--line); border-radius:2px; overflow:hidden; margin-top:6px; }
   .bar span { display:block; height:100%; }
   .chartbox { position:relative; height:260px; }
   .empty { color:var(--muted); }
@@ -77,7 +78,18 @@
 </div>
 
 <script>
-const COLORS = ['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#64748b'];
+// Category colours for the dark surface, in a fixed order that's been checked for colour-blind separation.
+// Categories are sorted by amount, so neighbours in this list are neighbours in the doughnut.
+// Past 8, the rest share one grey rather than repeating colours.
+const COLORS = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+const REST = '#6b6a64', CARD = '#1a1a19', LINE = '#2f2f2c', MUTED = '#a09f97';
+const BAR_SELECTED = '#3987e5', BAR_OTHER = '#184f95';
+if (window.Chart) {
+  Chart.defaults.color = MUTED;
+  Chart.defaults.borderColor = LINE;
+  Chart.defaults.font.family = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  Object.assign(Chart.defaults.plugins.tooltip, { backgroundColor: '#2a2a28', borderColor: LINE, borderWidth: 1, cornerRadius: 4, titleColor: '#f0efec', bodyColor: '#f0efec' });
+}
 let DATA = null, pieChart = null, trendChart = null;
 
 const $ = id => document.getElementById(id);
@@ -166,7 +178,7 @@ function render() {
   const cats = {};
   out.forEach(t => { cats[t.category] = (cats[t.category] || 0) - t.amount; });
   const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const color = i => COLORS[i % COLORS.length];
+  const color = i => COLORS[i] || REST;
   $('cats').innerHTML = catList.length
     ? '<tr><th>Category</th><th class="num">Amount</th><th class="num">Share</th></tr>' +
       catList.map(([c, v], i) => {
@@ -180,12 +192,12 @@ function render() {
     type: 'doughnut',
     data: {
       labels: catList.map(c => c[0]),
-      datasets: [{ data: catList.map(c => round2(c[1])), backgroundColor: catList.map((_, i) => color(i)), borderWidth: 0 }]
+      datasets: [{ data: catList.map(c => round2(c[1])), backgroundColor: catList.map((_, i) => color(i)), borderWidth: 2, borderColor: CARD }]
     },
     options: {
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: window.innerWidth < 600 ? 'bottom' : 'right' },
+        legend: { position: window.innerWidth < 600 ? 'bottom' : 'right', labels: { boxWidth: 12, boxHeight: 12 } },
         tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + rm(c.raw) + ' (' + (spent ? c.raw / spent * 100 : 0).toFixed(0) + '%)' } }
       }
     }
@@ -212,7 +224,7 @@ function render() {
     type: 'bar',
     data: {
       labels: months.map(monthShort),
-      datasets: [{ data: spentBy.map(round2), backgroundColor: months.map(k => k === key ? '#2563eb' : '#bfdbfe'), borderRadius: 6 }]
+      datasets: [{ data: spentBy.map(round2), backgroundColor: months.map(k => k === key ? BAR_SELECTED : BAR_OTHER), borderRadius: 4, maxBarThickness: 24 }]
     },
     options: {
       maintainAspectRatio: false,
