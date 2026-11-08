@@ -36,9 +36,13 @@ var webFS embed.FS
 
 var wiseAPI = "https://api.wise.com"
 
+// Malaysia time (no daylight saving). Hosts run on UTC, so cycle dates are worked out in MYT explicitly.
+var myt = time.FixedZone("MYT", 8*60*60)
+
 const (
 	currency     = "MYR"
-	monthsToLoad = 6
+	payDay       = 7 // pay cycles run from the 7th to the 6th; the dashboard's "left" counts down to the next one
+	cyclesToLoad = 6
 	localAddr    = "127.0.0.1:8765" // laptop mode: only reachable from this computer
 	localURL     = "http://localhost:8765"
 
@@ -83,6 +87,7 @@ type payload struct {
 	Tx        []transaction `json:"tx"`
 	Balance   *float64      `json:"balance"`
 	Updated   string        `json:"updated"`
+	CycleDay  int           `json:"cycleDay"`
 	CanLogout bool          `json:"canLogout"`
 }
 
@@ -339,7 +344,7 @@ func getData() (*payload, error) {
 	}
 
 	now := time.Now()
-	start := time.Date(now.Year(), now.Month()-(monthsToLoad-1), 1, 0, 0, 0, 0, time.Local)
+	start := cycleStart(now).AddDate(0, -(cyclesToLoad - 1), 0)
 	q := url.Values{}
 	q.Set("currency", currency)
 	q.Set("type", "COMPACT")
@@ -352,7 +357,7 @@ func getData() (*payload, error) {
 		return nil, err
 	}
 
-	out := &payload{Tx: []transaction{}, Updated: now.UTC().Format(time.RFC3339)}
+	out := &payload{Tx: []transaction{}, Updated: now.UTC().Format(time.RFC3339), CycleDay: payDay}
 	list, _ := st["transactions"].([]any)
 	for _, item := range list {
 		t := obj(item)
@@ -385,6 +390,16 @@ func getData() (*payload, error) {
 		out.Balance = &v
 	}
 	return out, nil
+}
+
+// cycleStart returns the start of the pay cycle containing t: the latest payday at midnight, Malaysia time.
+func cycleStart(t time.Time) time.Time {
+	t = t.In(myt)
+	s := time.Date(t.Year(), t.Month(), payDay, 0, 0, 0, 0, myt)
+	if t.Before(s) {
+		s = s.AddDate(0, -1, 0)
+	}
+	return s
 }
 
 // getIDs finds your personal profile and MYR balance once, then remembers them.

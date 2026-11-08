@@ -4,7 +4,9 @@
 
 Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser. It runs either on his laptop or, in hosted mode, as a private password-protected website for his other devices (Android, Windows, sometimes a Mac). It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
 
-Focus is **tracking** (where money goes, percentages, what's left this month), not budgeting.
+Focus is **tracking**, not budgeting: a quick "where am I right now" view. Deeper monthly analysis is meant to happen with AI, not on the dashboard.
+
+**Money model (agreed with Irfan):** Wise is his spending wallet. Paydays are the 7th and the 22nd. He tops up Wise with his spending money on payday, so **the Wise balance is what's left**, with no budget numbers to configure. A pay cycle runs from the 7th to the 6th (`payDay` in `main.go`). Weeks are normal calendar weeks, Monday to Sunday, and don't follow the cycle. "Per day" divides the balance by the days left until the next 7th, which reads low until a 22nd top-up lands. That's accepted as erring on the safe side.
 
 ## Status (2026-11-08)
 
@@ -19,7 +21,8 @@ Focus is **tracking** (where money goes, percentages, what's left this month), n
 | File | Purpose |
 |---|---|
 | `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
-| `web/index.html` | Dashboard UI. Vanilla JS plus Chart.js 4.4.1 from cdnjs. If Chart.js can't load, the page skips the charts and still shows the numbers. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category colours are a fixed 8-slot order checked for colour-blind separation on the `#1a1a19` card, assigned by amount rank so neighbours in the doughnut are neighbours in the list. Categories past 8 share one grey. Don't cycle colours or pick them ad hoc. |
+| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. |
+| `main_test.go` | `go test ./...`: pay-cycle boundaries (payday, the day before, a UTC host, the new year). CI doesn't run it yet. |
 | `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
 | `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
 | `.github/workflows/build.yml` | Builds the Windows exe on every push to `main` (as an artifact) and on `v*` tags (as a release). Verified on `main`; the tag/release path is untested. |
@@ -48,14 +51,22 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **`/api/data` flow:**
   1. `GET /v2/profiles` and pick the profile whose type is `PERSONAL`. This is cached in memory.
   2. `GET /v4/profiles/{pid}/balances?types=STANDARD` and pick the `MYR` balance. Also cached.
-  3. `GET /v1/profiles/{pid}/balance-statements/{bid}/statement.json?currency=MYR&type=COMPACT&intervalStart=…&intervalEnd=…`. The window runs from the 1st of the month 5 months ago (local time) to now.
+  3. `GET /v1/profiles/{pid}/balance-statements/{bid}/statement.json?currency=MYR&type=COMPACT&intervalStart=…&intervalEnd=…`. The window runs from the start of the pay cycle 5 cycles back (the 7th at midnight, **Malaysia time** via a fixed UTC+8 zone, because hosts run on UTC) to now. The payload also carries `cycleDay` so the page uses the same payday.
 - **JSON parsing** is deliberately loose (`map[string]any` with `UseNumber`), so an unexpected field shape won't break decoding.
 - **Each transaction** becomes `{date, amount, name, category, note}`:
   - **amount:** negative means money out. The sign is forced to match `DEBIT` or `CREDIT`.
   - **name:** the first one present of `details.merchant.name`, then `details.recipient.name`, then `details.senderName`, then `details.description`.
   - **category:** if the amount is positive, it's "Money in". Otherwise the first keyword match in `categories` wins. If nothing matches, it uses Wise's `merchant.category`, then `TRANSFER` becomes "Transfers" and `CONVERSION` becomes "Currency exchange", and anything left is "Other".
 - **Balance** comes from `endOfStatementBalance`.
-- **All the maths** happens client-side in `index.html`: the month selector, the four summary cards (spent, money in, left this month, balance now), the category doughnut and table with percentages, top places, the 6-month bar chart, and the transaction list. All text is HTML-escaped.
+- **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
+  1. A **pay-cycle picker** ("7 Nov – 6 Dec").
+  2. For the current cycle only, a hero card, **Left until payday**, showing the Wise balance with "about RM X a day · RM Y a week · N days to go" (the week figure is hidden under 7 days), and a **Spent this week** card (since Monday).
+  3. A **Spent** card for the cycle, with a per-day average.
+  4. **By category** with percentages.
+  5. **Top places**, top 5.
+  6. The **transactions** list.
+
+  Past cycles show only the spent card, categories, places and transactions. Top-ups show in the list as "Money in" but don't count as spending. All text is HTML-escaped.
 - **Errors** are returned as `{"error": "..."}` with HTTP 502 and shown in a red box on the page.
 
 ## Build, run, test
@@ -77,7 +88,7 @@ WISE_TOKEN=good /tmp/tracker-test < /dev/null &
 curl -s localhost:8765/api/data | python3 -m json.tool
 ```
 
-The mock covers a business plus a personal profile with large IDs, USD and MYR balances, card, deposit, transfer, unmatched-merchant and older-month transactions, and a 401 for a bad token. Chart.js loads from cdnjs, which the Claude Code cloud sandbox blocks. For headless screenshots, `npm pack chart.js@4.4.1` and route the cdnjs URL to `package/dist/chart.umd.js`.
+The mock covers a business plus a personal profile with large IDs, USD and MYR balances, card, deposit, transfer, unmatched-merchant and older-month transactions, and a 401 for a bad token. For headless screenshots, set the browser `timezoneId` to `Asia/Kuala_Lumpur`, or cycle and week boundaries will be shifted.
 
 To test hosted mode, start the same test binary with these variables:
 
@@ -112,7 +123,9 @@ When scripting parallel curls against it, `wait` on their PIDs only. A bare `wai
 
 ## Ideas not built (only build if Irfan asks)
 
-- An AI question box (needs an LLM API key)
+- An AI question box (needs an LLM API key). The lighter option offered was a **Copy for AI** button that copies the cycle's transactions as text to paste into Claude. Irfan hasn't asked for either yet.
+- Deep-dive views Irfan said belong in a monthly AI analysis, not the dashboard: needs vs wants, a watch list (AI subscriptions, Roblox), and a comparison with last cycle. AI subscriptions also have no category yet.
+- The doughnut and the 6-month bar chart were removed on purpose (they overlapped with the category table, and the trend view is monthly deep-dive material). Don't bring them back unasked.
 - A Mac build (`go build` on the Mac)
 - Auto-refresh on a timer
 - A `categories.json` next to the exe so categories can be edited without rebuilding
