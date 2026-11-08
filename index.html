@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spending Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --out:#dc2626; --in:#16a34a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  h1 { font-size:22px; margin:0; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  select, button { font:inherit; font-size:14px; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--text); }
+  button { background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:600; }
+  button:disabled { opacity:.6; cursor:default; }
+  #status { color:var(--muted); font-size:13px; }
+  #error { display:none; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:8px; margin-bottom:12px; font-size:14px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0; }
+  .label { color:var(--muted); font-size:13px; }
+  .value { font-size:26px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .sub { color:var(--muted); font-size:12px; margin-top:4px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  @media (max-width:800px) { .grid { grid-template-columns:1fr; } }
+  h2 { font-size:15px; margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:8px 4px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .out { color:var(--out); } .in { color:var(--in); }
+  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar span { display:block; height:100%; }
+  .chartbox { position:relative; height:260px; }
+  .empty { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spending Tracker</h1>
+    <div class="controls">
+      <span id="status">Loading…</span>
+      <select id="month"></select>
+      <button id="update">Update</button>
+    </div>
+  </header>
+  <div id="error"></div>
+
+  <div class="stats">
+    <div class="card"><div class="label">Spent</div><div class="value out" id="spent">–</div><div class="sub" id="daily"></div></div>
+    <div class="card"><div class="label">Money in</div><div class="value in" id="income">–</div><div class="sub" id="incomeCount"></div></div>
+    <div class="card"><div class="label">Left this month</div><div class="value" id="net">–</div><div class="sub">Money in minus spent</div></div>
+    <div class="card"><div class="label">Wise balance now</div><div class="value" id="balance">–</div><div class="sub" id="txCount"></div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Where it goes</h2><div class="chartbox"><canvas id="pie"></canvas></div></div>
+    <div class="card"><h2>By category</h2><table id="cats"></table></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Top places</h2><table id="top"></table></div>
+    <div class="card"><h2>Spending by month</h2><div class="chartbox"><canvas id="trend"></canvas></div></div>
+  </div>
+
+  <div class="card"><h2>Transactions</h2><table id="list"></table></div>
+</div>
+
+<script>
+const COLORS = ['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#64748b'];
+let DATA = null, pieChart = null, trendChart = null;
+
+const $ = id => document.getElementById(id);
+const rm = n => 'RM ' + Number(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const round2 = n => Math.round(n * 100) / 100;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const monthKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+const keyToDate = k => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1); };
+const monthLong = k => keyToDate(k).toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });
+const monthShort = k => keyToDate(k).toLocaleDateString('en-MY', { month: 'short' });
+
+function update() {
+  $('update').disabled = true;
+  $('status').textContent = 'Updating…';
+  $('error').style.display = 'none';
+  fetch('/api/data')
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+      DATA = d;
+      DATA.tx.forEach(t => { t.d = new Date(t.date); t.month = monthKey(t.d); });
+      fillMonths();
+      render();
+      $('status').textContent = 'Updated ' + new Date(d.updated).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+    })
+    .catch(e => {
+      const msg = (e && e.message) || String(e);
+      $('error').textContent = msg === 'Failed to fetch' ? 'The app is not running. Open SpendingTracker again.' : msg;
+      $('error').style.display = 'block';
+      $('status').textContent = 'Update failed';
+    })
+    .finally(() => { $('update').disabled = false; });
+}
+
+function fillMonths() {
+  const sel = $('month');
+  const current = sel.value || monthKey(new Date());
+  const keys = new Set(DATA.tx.map(t => t.month));
+  keys.add(monthKey(new Date()));
+  const sorted = [...keys].sort().reverse();
+  sel.innerHTML = sorted.map(k => `<option value="${k}">${monthLong(k)}</option>`).join('');
+  sel.value = sorted.includes(current) ? current : sorted[0];
+}
+
+function render() {
+  if (!DATA) return;
+  const key = $('month').value;
+  const now = new Date();
+  const tx = DATA.tx.filter(t => t.month === key).sort((a, b) => b.d - a.d);
+  const out = tx.filter(t => t.amount < 0);
+  const inc = tx.filter(t => t.amount > 0);
+  const spent = out.reduce((s, t) => s - t.amount, 0);
+  const income = inc.reduce((s, t) => s + t.amount, 0);
+
+  // Summary cards
+  const [y, m] = key.split('-').map(Number);
+  const days = key === monthKey(now) ? now.getDate() : new Date(y, m, 0).getDate();
+  $('spent').textContent = rm(spent);
+  $('daily').textContent = rm(spent / days) + ' per day on average';
+  $('income').textContent = rm(income);
+  $('incomeCount').textContent = inc.length + (inc.length === 1 ? ' payment' : ' payments') + ' received';
+  const net = income - spent;
+  $('net').textContent = (net < 0 ? '−' : '') + rm(Math.abs(net));
+  $('net').className = 'value ' + (net < 0 ? 'out' : 'in');
+  $('balance').textContent = DATA.balance == null ? '–' : rm(DATA.balance);
+  $('txCount').textContent = tx.length + (tx.length === 1 ? ' transaction' : ' transactions') + ' in ' + monthShort(key);
+
+  // Where it goes: categories with percentages
+  const cats = {};
+  out.forEach(t => { cats[t.category] = (cats[t.category] || 0) - t.amount; });
+  const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  const color = i => COLORS[i % COLORS.length];
+  $('cats').innerHTML = catList.length
+    ? '<tr><th>Category</th><th class="num">Amount</th><th class="num">Share</th></tr>' +
+      catList.map(([c, v], i) => {
+        const pct = spent ? v / spent * 100 : 0;
+        return `<tr><td>${esc(c)}<div class="bar"><span style="width:${pct}%;background:${color(i)}"></span></div></td>` +
+               `<td class="num">${rm(v)}</td><td class="num">${pct.toFixed(0)}%</td></tr>`;
+      }).join('')
+    : '<tr><td class="empty">No spending this month yet.</td></tr>';
+
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart($('pie'), {
+    type: 'doughnut',
+    data: {
+      labels: catList.map(c => c[0]),
+      datasets: [{ data: catList.map(c => round2(c[1])), backgroundColor: catList.map((_, i) => color(i)), borderWidth: 0 }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: window.innerWidth < 600 ? 'bottom' : 'right' },
+        tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + rm(c.raw) + ' (' + (spent ? c.raw / spent * 100 : 0).toFixed(0) + '%)' } }
+      }
+    }
+  });
+
+  // Top places
+  const places = {};
+  out.forEach(t => {
+    const p = places[t.name] || (places[t.name] = { total: 0, count: 0 });
+    p.total -= t.amount;
+    p.count += 1;
+  });
+  const top = Object.entries(places).sort((a, b) => b[1].total - a[1].total).slice(0, 8);
+  $('top').innerHTML = top.length
+    ? '<tr><th>Place</th><th class="num">Times</th><th class="num">Total</th></tr>' +
+      top.map(([n, p]) => `<tr><td>${esc(n)}</td><td class="num">${p.count}</td><td class="num">${rm(p.total)}</td></tr>`).join('')
+    : '<tr><td class="empty">Nothing yet.</td></tr>';
+
+  // Spending by month (last 6 months, selected month highlighted)
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+  const spentBy = months.map(k => DATA.tx.filter(t => t.month === k && t.amount < 0).reduce((s, t) => s - t.amount, 0));
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart($('trend'), {
+    type: 'bar',
+    data: {
+      labels: months.map(monthShort),
+      datasets: [{ data: spentBy.map(round2), backgroundColor: months.map(k => k === key ? '#2563eb' : '#bfdbfe'), borderRadius: 6 }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + rm(c.raw) } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => 'RM ' + v } } }
+    }
+  });
+
+  // Transactions list
+  $('list').innerHTML = tx.length
+    ? '<tr><th>When</th><th>Place</th><th>Category</th><th class="num">Amount</th></tr>' +
+      tx.map(t => {
+        const when = t.d.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) + ', ' +
+                     t.d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+        const amt = (t.amount < 0 ? '−' : '+') + rm(Math.abs(t.amount));
+        return `<tr><td>${when}</td><td>${esc(t.name)}</td><td>${esc(t.category)}</td>` +
+               `<td class="num ${t.amount < 0 ? 'out' : 'in'}">${amt}</td></tr>`;
+      }).join('')
+    : '<tr><td class="empty">No transactions this month yet.</td></tr>';
+}
+
+$('update').addEventListener('click', update);
+$('month').addEventListener('change', render);
+update();
+</script>
+</body>
+</html>

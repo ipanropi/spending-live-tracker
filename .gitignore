@@ -1,0 +1,7 @@
+# Your Wise token. Never commit this.
+wise_token.txt
+
+# Build output
+dist/
+*.exe
+SpendingTracker
