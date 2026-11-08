@@ -12,6 +12,7 @@
   :root { color-scheme:dark; --bg:#111110; --card:#1a1a19; --input:#222220; --text:#f0efec; --muted:#a09f97; --line:#2f2f2c;
           --accent:#2563eb; --bar:#3987e5; --good:#4ade80; --spend:#f87171; --radius:4px; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
   .wrap { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
   header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:20px; }
@@ -26,7 +27,8 @@
   #error { display:none; background:#2a1515; color:#fca5a5; border:1px solid #5c2424; padding:12px; border-radius:var(--radius); margin-bottom:12px; font-size:14px; }
 
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; min-width:0; }
-  .overview { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+  .overview { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:12px; }
+  .overview .hero { grid-column:span 2; grid-row:span 2; display:flex; flex-direction:column; justify-content:center; }
   .overview.past { grid-template-columns:1fr; }
   .label { color:var(--muted); font-size:13px; }
   .big { font-size:40px; font-weight:700; margin-top:4px; letter-spacing:-0.5px; font-variant-numeric:tabular-nums; }
@@ -36,7 +38,7 @@
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
   @media (max-width:800px) {
     .overview { grid-template-columns:1fr 1fr; }
-    .overview .hero { grid-column:1 / -1; }
+    .overview .hero { grid-column:1 / -1; grid-row:auto; }
     .grid { grid-template-columns:1fr; }
   }
   @media (max-width:420px) { .big { font-size:34px; } .value { font-size:22px; } }
@@ -70,13 +72,15 @@
   <div id="error"></div>
 
   <div class="overview" id="overview">
-    <div class="card hero" id="heroCard">
+    <div class="card hero now">
       <div class="label" id="leftLabel">Left</div>
       <div class="big good" id="left">–</div>
-      <div class="sub" id="pace"></div>
+      <div class="sub" id="daysLeft"></div>
     </div>
+    <div class="card now"><div class="label">Per day</div><div class="value" id="perDay">–</div></div>
+    <div class="card now"><div class="label">Per week</div><div class="value" id="perWeek">–</div></div>
     <div class="card"><div class="label" id="spentLabel">Spent this month</div><div class="value spend" id="spent">–</div><div class="sub" id="spentSub"></div></div>
-    <div class="card" id="weekCard"><div class="label">Spent this week</div><div class="value spend" id="week">–</div></div>
+    <div class="card now"><div class="label">Spent this week</div><div class="value spend" id="week">–</div></div>
   </div>
 
   <div class="grid">
@@ -168,14 +172,14 @@ function render() {
   const out = tx.filter(t => t.amount < 0);
   const spent = spentIn(out);
 
-  // Overview: "left" and "this week" only make sense for the month you're in now
+  // Overview: "left", per day/week and "this week" only make sense for the month you're in now
   $('overview').classList.toggle('past', !isCurrent);
-  $('heroCard').hidden = $('weekCard').hidden = !isCurrent;
+  document.querySelectorAll('#overview .now').forEach(el => { el.hidden = !isCurrent; });
   if (isCurrent) renderNow(now);
   const days = isCurrent ? daysBetween(start, startOfDay(now)) + 1 : daysBetween(start, end);
   $('spentLabel').textContent = isCurrent ? 'Spent this month' : 'Spent';
   $('spent').textContent = rm(spent);
-  $('spentSub').textContent = rm(spent / days) + '/day';
+  $('spentSub').textContent = 'avg ' + rm(spent / days) + '/day';
 
   // By category, with each one's share of the spending
   const cats = {};
@@ -217,13 +221,11 @@ function renderNow(now) {
   $('leftLabel').textContent = 'Left until ' + dShort(payday);
   $('left').textContent = bal == null ? '–' : (bal < 0 ? '−' : '') + rm(Math.abs(bal));
   $('left').className = 'big ' + (bal != null && bal < 0 ? 'spend' : 'good');
-  const pace = [];
-  if (bal > 0) {
-    pace.push(rm(bal / daysLeft) + '/day');
-    if (daysLeft >= 7) pace.push(rm(bal / daysLeft * 7) + '/week');
-  }
-  pace.push(daysLeft + (daysLeft === 1 ? ' day' : ' days'));
-  $('pace').textContent = pace.join(' · ');
+  $('daysLeft').textContent = daysLeft + (daysLeft === 1 ? ' day' : ' days');
+  // What you can spend per day and per week until payday. With under a week to go, a week's worth is all of it.
+  const perDay = bal > 0 ? bal / daysLeft : 0;
+  $('perDay').textContent = bal == null ? '–' : rm(perDay);
+  $('perWeek').textContent = bal == null ? '–' : rm(Math.min(Math.max(bal, 0), perDay * 7));
 
   const monday = startOfDay(now);
   monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7); // weeks run Monday to Sunday

@@ -25,7 +25,7 @@ Weeks are normal calendar weeks, Monday to Sunday, and don't follow either.
 | File | Purpose |
 |---|---|
 | `main.go` | The whole backend, including login. Go standard library only. Avoid `html/template`: it added about 2.5 MB to the exe. |
-| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and labels are short ("Left until 22 Nov", "RM 26.11/day · RM 182.80/week · 14 days"). |
+| `web/index.html` | Dashboard UI. Vanilla JS with no external requests: Chart.js and both charts were removed on purpose. Dark only, by Irfan's choice, with 4px corners (he dislikes heavy rounding). Colours are CSS variables on `:root`. Category bars use one colour, because without the doughnut there's nothing for colour to identify. Colour is kept for the important numbers only: "left" is `--good` (green, or `--spend` if negative), the two spent figures are `--spend` (soft red), and money in within the list is green. Spending rows in the list stay neutral. Irfan asked for "some colour, not too much" and minimal text, so lists are plain rows in simple cards (no table headers), and labels are short ("Left until 22 Nov", "14 days", "Per day"). |
 | `main_test.go` | `go test ./...`: pay-cycle boundaries (payday, the day before, a UTC host, the new year). CI doesn't run it yet. |
 | `web/login.html` | Login page (hosted mode). The server swaps `<!--ERROR-->` for a fixed message. |
 | `web/manifest.webmanifest`, `web/icon-*.png` | Home-screen app manifest and icons (180 for Apple, 192, 512 as `any` plus `maskable`). |
@@ -64,8 +64,8 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 - **Balance** comes from `endOfStatementBalance`.
 - **All the maths** happens client-side in `index.html`, in the browser's local time. The pieces, in page order:
   1. A **pay-cycle picker** ("7 Nov – 6 Dec").
-  2. For the current cycle only, a hero card, **Left until 22 Nov**, showing the Wise balance with "RM X/day · RM Y/week · N days" until the next payday (`nextPayday()`; the week figure is hidden under 7 days), and a **Spent this week** card (since Monday).
-  3. A **Spent this month** card for the cycle, with a per-day average.
+  2. For the current cycle only: a hero card, **Left until 22 Nov**, with the Wise balance in green and "N days" under it (counting down to `nextPayday()`), plus separate small cards for **Per day** and **Per week** (balance ÷ days left, ×7 for the week, capped at the balance when under a week remains) and **Spent this week** (since Monday). Irfan wanted per day and per week as their own cards, not one combined line.
+  3. A **Spent this month** card for the cycle, with "avg RM X/day". On a phone, the four small cards form a 2×2 grid under the hero. On a laptop, the hero takes the left half and the four cards sit to its right.
   4. **By category** with percentages.
   5. **Top places**, top 5, with "×N" only when N > 1.
   6. The **transactions** list: name, then "date · category" in small text, then the amount.
