@@ -128,22 +128,13 @@ ThemeData buildTheme() {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(shape: _shape, foregroundColor: Palette.text),
     ),
-    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: Palette.text2)),
-    inputDecorationTheme: const InputDecorationTheme(
-      filled: true,
-      fillColor: Palette.input,
-      labelStyle: TextStyle(color: Palette.muted),
-      border: OutlineInputBorder(
-        borderRadius: corners,
-        borderSide: BorderSide(color: Palette.line),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: corners,
-        borderSide: BorderSide(color: Palette.line),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: corners,
-        borderSide: BorderSide(color: Palette.accent, width: 2),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: _shape,
+        foregroundColor: Palette.text,
+        side: const BorderSide(color: Palette.line),
+        minimumSize: const Size(64, 48),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       ),
     ),
     popupMenuTheme: const PopupMenuThemeData(

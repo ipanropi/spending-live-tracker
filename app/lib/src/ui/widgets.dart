@@ -17,22 +17,18 @@ class AppScope extends InheritedNotifier<AppController> {
   static AppController read(BuildContext context) => context.getInheritedWidgetOfExactType<AppScope>()!.notifier!;
 }
 
-/// A flat card: dark surface, thin border, 4px corners. Tappable when [onTap] is set,
-/// with the platform's press, hover and focus feedback.
+/// A flat panel: dark surface, thin border, 4px corners. One panel holds one group
+/// of related things, so there are few of them and each means something.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.onTap, this.semanticLabel});
+  const Panel({super.key, required this.child});
 
   final Widget child;
-  final VoidCallback? onTap;
-  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(padding: EdgeInsets.all(context.pad), child: child);
+    // A Material, so the press ripple of buttons inside shows on the panel, not under it.
     return Semantics(
       container: true,
-      button: onTap != null,
-      label: semanticLabel,
       child: Material(
         color: Palette.card,
         shape: const RoundedRectangleBorder(
@@ -40,13 +36,17 @@ class Panel extends StatelessWidget {
           side: BorderSide(color: Palette.line),
         ),
         clipBehavior: Clip.antiAlias,
-        child: onTap == null ? content : InkWell(onTap: onTap, child: content),
+        child: Padding(padding: EdgeInsets.all(context.pad), child: child),
       ),
     );
   }
 }
 
-/// An amount as a focal number: the digits big, "RM" smaller and quieter so the eye lands on the value.
+/// "RM" and the cents are drawn smaller and dimmer than the ringgit, so the eye
+/// lands on the value. 81% is the least opacity that keeps the red at 4.5:1.
+const double _quietAlpha = 0.81;
+
+/// An amount as a focal number: the ringgit big, "RM" and the cents quieter.
 class MoneyText extends StatelessWidget {
   const MoneyText(this.cents, {super.key, required this.size, this.color, this.textScaler});
 
@@ -69,15 +69,24 @@ class MoneyText extends StatelessWidget {
     );
     if (cents == null) return Text('–', style: style, textScaler: textScaler);
     final (sign, number) = rmParts(cents!);
+    final dot = number.lastIndexOf('.');
+    final quiet = TextStyle(
+      fontWeight: FontWeight.w600,
+      color: color.withValues(alpha: _quietAlpha),
+    );
     return Text.rich(
       TextSpan(
         children: [
           if (sign.isNotEmpty) TextSpan(text: sign),
           TextSpan(
             text: 'RM ',
-            style: TextStyle(fontSize: size * 0.5, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.7)),
+            style: quiet.copyWith(fontSize: size * 0.5),
           ),
-          TextSpan(text: number),
+          TextSpan(text: number.substring(0, dot)),
+          TextSpan(
+            text: number.substring(dot),
+            style: quiet.copyWith(fontSize: size * 0.6),
+          ),
         ],
       ),
       style: style,
@@ -87,14 +96,16 @@ class MoneyText extends StatelessWidget {
   }
 }
 
-/// An overview card: the number on its own line as the focal point, then one
-/// short phrase per line under it.
-class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.cents, required this.lines, this.color, this.hero = false});
+/// A figure: the number on its own line as the focal point, then one short
+/// phrase per line under it. Read by screen readers as one sentence.
+class Figure extends StatelessWidget {
+  const Figure({super.key, required this.cents, required this.lines, this.color, this.hero = false});
 
   final int? cents;
   final List<String> lines;
   final Color? color;
+
+  /// The one number that matters most on the screen.
   final bool hero;
 
   @override
@@ -103,30 +114,28 @@ class StatCard extends StatelessWidget {
     // The numbers are already large; past 1.3× they'd only be shrunk back to fit.
     // All the other text scales fully with the system setting.
     final scaler = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
-    return Panel(
-      child: Semantics(
-        // Read as one sentence: "RM 1,780.00, left until 22 Nov, 14 days left".
-        label: [if (cents == null) 'Unknown' else rm(cents!), ...lines].join(', '),
-        excludeSemantics: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // A fixed-height line for the number: numbers line up across cards, and long
-            // amounts shrink just enough to fit instead of overflowing.
-            SizedBox(
-              height: scaler.scale(size) * 1.15,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: MoneyText(cents, size: size, color: color, textScaler: scaler),
-              ),
+    return Semantics(
+      container: true,
+      // "RM 1,780.00, left until 22 Nov, 14 days left"
+      label: [if (cents == null) 'Unknown' else rm(cents!), ...lines].join(', '),
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // A fixed-height line for the number: long amounts shrink just enough to fit.
+          SizedBox(
+            height: scaler.scale(size) * 1.15,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: MoneyText(cents, size: size, color: color, textScaler: scaler),
             ),
-            SizedBox(height: hero ? Space.m : Space.s),
-            Text(lines.first, style: hero ? Styles.desc.copyWith(fontSize: 16) : Styles.desc),
-            for (final line in lines.skip(1)) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.extra)],
-          ],
-        ),
+          ),
+          SizedBox(height: hero ? Space.m : Space.s),
+          Text(lines.first, style: hero ? Styles.desc.copyWith(fontSize: 16) : Styles.desc),
+          for (final line in lines.skip(1)) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.extra)],
+        ],
       ),
     );
   }
@@ -153,7 +162,7 @@ class InfoRow extends StatelessWidget {
   /// Shown right under the first line, before [lines]. Used for the share bar.
   final Widget? below;
 
-  /// After the amount, e.g. a dropdown chevron.
+  /// After the amount, e.g. a dropdown arrow.
   final Widget? trailing;
 
   @override
@@ -165,7 +174,7 @@ class InfoRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(child: Text(name, style: Styles.rowName)),
+              Expanded(child: Text(displayName(name), style: Styles.rowName)),
               const SizedBox(width: Space.l),
               Text(amount, style: Styles.rowAmount.copyWith(color: amountColor)),
               if (trailing != null) ...[const SizedBox(width: Space.m), trailing!],
@@ -175,6 +184,30 @@ class InfoRow extends StatelessWidget {
           for (final line in lines) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.meta)],
         ],
       ),
+    );
+  }
+}
+
+/// Rows separated by dividers, each with the same breathing room.
+class RowList extends StatelessWidget {
+  const RowList({super.key, required this.rows, this.vertical = Space.l});
+
+  final List<Widget> rows;
+  final double vertical;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const Divider(),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: vertical),
+            child: rows[i],
+          ),
+        ],
+      ],
     );
   }
 }
@@ -221,7 +254,7 @@ class ShareBar extends StatelessWidget {
   }
 }
 
-/// A card or list heading, marked as a heading for screen readers.
+/// A panel or list heading, marked as a heading for screen readers.
 class Heading extends StatelessWidget {
   const Heading(this.text, {super.key, this.style = Styles.sectionTitle});
 
@@ -232,7 +265,7 @@ class Heading extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(header: true, child: Text(text, style: style));
 }
 
-/// A right-pointing chevron that signals "opens more".
+/// A right-pointing chevron: "goes to another page". Dropdowns use ⌄ instead.
 class Chevron extends StatelessWidget {
   const Chevron({super.key, this.size = 22});
 
@@ -244,57 +277,98 @@ class Chevron extends StatelessWidget {
   );
 }
 
-/// A dashboard card with a title, a preview of a list, and a chevron that opens all of it.
-class SectionCard extends StatelessWidget {
-  const SectionCard({
-    super.key,
-    required this.title,
-    required this.rows,
-    required this.total,
-    required this.empty,
-    required this.onOpen,
-  });
+/// A labelled way into a full list. The label names where it goes ("View all
+/// categories"), so it doesn't depend on spotting an icon, and the whole row is
+/// a 48dp target.
+class ViewAllButton extends StatelessWidget {
+  const ViewAllButton(this.label, {super.key, required this.onPressed});
 
-  final String title;
-
-  /// The preview rows (already limited).
-  final List<Widget> rows;
-
-  /// How many items there are in all.
-  final int total;
-  final String empty;
-  final VoidCallback onOpen;
+  final String label;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final more = total - rows.length;
-    return Panel(
-      onTap: onOpen,
-      semanticLabel: 'Show all',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size.fromHeight(48),
+        textStyle: Styles.rowName.copyWith(fontWeight: FontWeight.w600),
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(child: Heading(title)),
-              const Chevron(),
-            ],
-          ),
-          if (rows.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: Space.l),
-              child: Text(empty, style: Styles.meta),
-            ),
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const Divider(),
-            Padding(
-              padding: EdgeInsets.only(top: Space.l, bottom: i == rows.length - 1 ? 0 : Space.l),
-              child: rows[i],
-            ),
-          ],
-          if (more > 0) ...[const SizedBox(height: Space.l), Text('+$more more', style: Styles.meta)],
+          Expanded(child: Text(label)),
+          const Chevron(size: 20),
         ],
       ),
+    );
+  }
+}
+
+/// A two-or-more-way switch, like Categories | Places: labelled options with the
+/// chosen one filled. Exactly 48dp tall on every platform, so it's an easy target
+/// and measures true when panels share a height (Flutter's SegmentedButton is
+/// shorter on desktop and under-reports its height).
+class ChoiceSwitch<T> extends StatelessWidget {
+  const ChoiceSwitch({super.key, required this.options, required this.selected, required this.onChanged});
+
+  final List<(T, String)> options;
+  final T selected;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    // Clipped to the 4px corners, with the outline drawn over the chosen side's fill.
+    return ClipRRect(
+      borderRadius: corners,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: corners,
+          border: Border.all(color: Palette.line),
+        ),
+        child: _row(),
+      ),
+    );
+  }
+
+  Widget _row() {
+    return Row(
+      children: [
+        for (final (value, label) in options)
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: value == selected,
+              inMutuallyExclusiveGroup: true,
+              child: Material(
+                color: value == selected ? Palette.line : Colors.transparent,
+                child: InkWell(
+                  onTap: value == selected ? null : () => onChanged(value),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s, vertical: Space.xs),
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                            color: value == selected ? Palette.text : Palette.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

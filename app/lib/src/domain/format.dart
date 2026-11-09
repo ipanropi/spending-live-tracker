@@ -58,8 +58,34 @@ String updatedLabel(DateTime fetched, {required DateTime now}) {
   return 'Updated ${whenLabel(fetched, now: now)}';
 }
 
+/// "since Mon, 2 Nov", "since yesterday", "since today": when a running total started.
+String sinceLabel(DateTime start, {required DateTime now}) => switch (_calendarDays(start, now)) {
+  0 => 'since today',
+  1 => 'since yesterday',
+  _ => 'since ${dayLabel(start, now: now)}',
+};
+
 /// "1 time", "3 times"
 String plural(int n, String word) => '$n $word${n == 1 ? '' : 's'}';
+
+/// Merchant names arrive in capitals ("KANTIN PEJABAT", "GRAB*RIDE"), which are
+/// hard to read; this shows them in normal case ("Kantin Pejabat", "Grab Ride").
+/// Short codes without vowels (KTM, KFC) and anything with a digit stay as they
+/// are. Names that already have lowercase letters are left alone. Display only:
+/// grouping and categories still use the name as Wise sent it.
+String displayName(String raw) {
+  if (raw.contains(RegExp('[a-z]'))) return raw;
+  return raw
+      .replaceAll('*', ' ')
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(
+        (word) => word.contains(RegExp('[0-9]')) || (word.length <= 3 && !word.contains(RegExp('[AEIOU]')))
+            ? word
+            : word[0] + word.substring(1).toLowerCase(),
+      )
+      .join(' ');
+}
 
 /// "7 Nov – 6 Dec", with the year added when the cycle ends in a different year from [now].
 String cycleLabel(DateTime start, {required DateTime now}) {

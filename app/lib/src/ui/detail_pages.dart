@@ -31,25 +31,33 @@ class _ListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final side = context.sidePad(_maxWidth);
+    // The header holds just the title, on one line. The month (and count) open the
+    // list instead, where they can wrap at any text size rather than be cut off.
+    final intro = Padding(
+      padding: const EdgeInsets.only(top: Space.l, bottom: Space.xs),
+      child: Text(subtitle, style: Styles.meta),
+    );
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Heading(title, style: Styles.title),
-            Text(subtitle, style: Styles.meta),
-          ],
-        ),
+        title: Heading(title, style: Styles.title),
         bottom: const PreferredSize(preferredSize: Size.fromHeight(1), child: Divider()),
       ),
-      body: itemCount == 0
-          ? Center(child: Text(empty, style: Styles.meta))
-          : ListView.builder(
-              padding: EdgeInsets.fromLTRB(side, Space.xs, side, Space.xl + MediaQuery.paddingOf(context).bottom),
-              itemCount: itemCount,
-              itemBuilder: itemBuilder,
-            ),
+      body: ListView.builder(
+        padding: EdgeInsets.fromLTRB(side, 0, side, Space.xl + MediaQuery.paddingOf(context).bottom),
+        itemCount: itemCount + 1,
+        itemBuilder: (context, i) {
+          if (i > 0) return itemBuilder(context, i - 1);
+          if (itemCount > 0) return intro;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              intro,
+              const SizedBox(height: Space.xl),
+              Text(empty, style: Styles.meta),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -75,7 +83,7 @@ class CategoriesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _ListPage(
-    title: 'By category',
+    title: 'Categories',
     subtitle: label,
     empty: 'No spending this month.',
     itemCount: summary.categories.length,
@@ -125,7 +133,12 @@ class _CategoryTileState extends State<_CategoryTile> {
               child: InfoRow(
                 name: cat.name,
                 amount: rm(cat.cents),
-                trailing: AnimatedRotation(turns: _open ? 0.25 : 0, duration: motion, child: const Chevron(size: 20)),
+                // ⌄ opens in place; › is kept for "goes to another page".
+                trailing: AnimatedRotation(
+                  turns: _open ? 0.5 : 0,
+                  duration: motion,
+                  child: const ExcludeSemantics(child: Icon(Icons.expand_more, color: Palette.muted, size: 22)),
+                ),
                 below: ShareBar(fraction: widget.spentCents == 0 ? 0 : cat.cents / widget.spentCents),
                 lines: [plural(cat.count, 'payment')],
               ),
@@ -175,7 +188,7 @@ class PlacesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _ListPage(
-    title: 'All places',
+    title: 'Places',
     subtitle: label,
     empty: 'No places this month.',
     itemCount: summary.places.length,
@@ -214,7 +227,7 @@ class TransactionsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _ListPage(
-    title: 'All transactions',
+    title: 'Transactions',
     subtitle: '$label · ${plural(summary.transactions.length, 'transaction')}',
     empty: 'No transactions this month.',
     itemCount: _items.length,

@@ -91,6 +91,21 @@ class AppController extends ChangeNotifier {
     if (fetched == null || clock().difference(fetched) > staleAfter) await refresh();
   }
 
+  DateTime? _hiddenAt;
+
+  /// The app went into the background.
+  void appHidden() => _hiddenAt = clock();
+
+  /// The app is back. After [staleAfter] away it returns to the current month, so
+  /// a quick check never lands on an old month without the wallet figures, and it
+  /// refreshes if the data is old. A quick switch to another app keeps your place.
+  Future<void> appResumed() async {
+    final hidden = _hiddenAt;
+    _hiddenAt = null;
+    if (!showingCurrent && hidden != null && clock().difference(hidden) >= staleAfter) showCurrent();
+    await refreshIfStale();
+  }
+
   /// Checks [token] with Wise and, if it works, saves it and loads the dashboard.
   /// Returns an error message to show, or null on success.
   Future<String?> connect(String token) async {
@@ -145,6 +160,11 @@ class AppController extends ChangeNotifier {
   }
 
   DateTime get selectedCycle => _selected ?? cycleStart(now);
+
+  /// False while an earlier month is open.
+  bool get showingCurrent => _selected == null;
+
+  void showCurrent() => selectCycle(cycleStart(now));
 
   /// The selected cycle, summarised. Null until there's data.
   CycleSummary? get summary {

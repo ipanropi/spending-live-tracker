@@ -32,8 +32,9 @@ class _SpendingAppState extends State<SpendingApp> {
   void initState() {
     super.initState();
     widget.controller.start();
-    // Coming back to the app shows fresh numbers, without polling in the background.
-    _lifecycle = AppLifecycleListener(onResume: widget.controller.refreshIfStale);
+    // Coming back to the app shows fresh numbers, without polling in the background,
+    // and the current month again after a while away.
+    _lifecycle = AppLifecycleListener(onHide: widget.controller.appHidden, onResume: widget.controller.appResumed);
   }
 
   @override

@@ -32,6 +32,7 @@ class Today {
     required this.daysLeft,
     required this.perDayCents,
     required this.weekCents,
+    required this.weekStart,
   });
 
   /// The Wise balance, which is what's left until the next top-up. Null if Wise didn't send one.
@@ -46,6 +47,10 @@ class Today {
 
   /// Spent since Monday.
   final int weekCents;
+
+  /// That Monday. Shown with the week, because just after payday the week
+  /// still holds spending from before it.
+  final DateTime weekStart;
 }
 
 /// One monthly cycle (7th to 6th), summarised.
@@ -114,6 +119,7 @@ Today _today(Statement s, DateTime now) {
   final balance = s.balanceCents;
   final monday = weekStart(now);
   return Today(
+    weekStart: monday,
     balanceCents: balance,
     nextPayday: payday,
     daysLeft: daysLeft,

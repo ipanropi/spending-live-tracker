@@ -9,7 +9,8 @@ Future<void> showSettingsSheet(BuildContext context) => showModalBottomSheet<voi
   context: context,
   showDragHandle: true,
   builder: (sheet) => SafeArea(
-    child: Padding(
+    // Scrolls, so nothing is cut off with large text on a small phone.
+    child: SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,

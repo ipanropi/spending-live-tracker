@@ -94,6 +94,27 @@ void main() {
     expect(c.summary!.isCurrent, isTrue);
   });
 
+  test('after a while away, the app is back on the current month', () async {
+    tokens.value = 'good';
+    final c = controller();
+    await c.start();
+    c.selectCycle(DateTime(2026, 10, 7));
+    expect(c.showingCurrent, isFalse);
+
+    // A quick look at another app keeps your place.
+    c.appHidden();
+    clock = testNow.add(const Duration(minutes: 2));
+    await c.appResumed();
+    expect(c.showingCurrent, isFalse);
+
+    // Back later: the current month, so a quick check shows what's left.
+    c.appHidden();
+    clock = testNow.add(const Duration(minutes: 10));
+    await c.appResumed();
+    expect(c.showingCurrent, isTrue);
+    expect(c.summary!.today, isNotNull);
+  });
+
   test('"days left" moves on at midnight without new data', () async {
     tokens.value = 'good';
     final c = controller();

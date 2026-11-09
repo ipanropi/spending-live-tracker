@@ -55,37 +55,62 @@ void main() {
     if (settle) await tester.pumpAndSettle();
   }
 
+  Future<void> openMonth(WidgetTester tester, String label) async {
+    await tapVisible(tester, find.byTooltip('Choose month'));
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
   for (final MapEntry(key: name, value: size) in sizes.entries) {
     group(name, () {
-      testWidgets('dashboard shows the numbers, number first', (tester) async {
+      testWidgets('the dashboard reads in order: left, this month, where it went, transactions', (tester) async {
         await pumpApp(tester, size);
-        expect(find.text('7 Nov – 6 Dec'), findsOneWidget);
         expect(find.text('Updated just now'), findsOneWidget);
+        // The wallet, one panel: what's left until payday, then the pace.
+        expect(find.bySemanticsLabel('RM 1,780.00, left until 22 Nov, 14 days left'), findsOneWidget);
         expect(find.text('RM 1,780.00'), findsOneWidget);
-        expect(find.text('left until 22 Nov'), findsOneWidget);
-        expect(find.text('14 days left'), findsOneWidget);
         expect(find.text('RM 127.14'), findsOneWidget);
-        expect(find.text('per day'), findsOneWidget);
-        expect(find.text('RM 345.90'), findsOneWidget); // since Monday 2 Nov
+        expect(find.text('to spend a day'), findsOneWidget);
+        expect(find.text('RM 345.90'), findsOneWidget); // since Monday, so it includes days before payday
         expect(find.text('spent this week'), findsOneWidget);
+        expect(find.text('since Mon, 2 Nov'), findsOneWidget);
+        // This month, with its picker beside it rather than at the top of the screen.
+        expect(find.text('7 Nov – 6 Dec'), findsOneWidget);
         expect(find.text('RM 86.50'), findsOneWidget); // since the 7th
+        expect(find.text('spent this month'), findsOneWidget);
         expect(find.text('avg RM 43.25 a day'), findsOneWidget);
-        expect(find.text('By category'), findsOneWidget);
-        expect(find.text('Top places'), findsOneWidget);
-        expect(find.text('Transactions'), findsOneWidget);
-        expect(find.text('Today, 6:10 pm'), findsOneWidget); // recent days by name
+        // Where it went: three categories, and a labelled way to the rest.
+        // (Food & Drinks also shows as the category of two transactions.)
+        final food = find.text('Food & Drinks').first;
+        expect(find.descendant(of: find.byType(InfoRow), matching: find.byType(ShareBar)), findsNWidgets(3));
+        expect(find.text('View all categories'), findsOneWidget);
+        // The transactions behind it: the latest three.
+        expect(find.text('Today, 6:10 pm'), findsOneWidget);
+        expect(find.text('Yesterday, 7:15 pm'), findsNothing);
+        expect(find.text('View all transactions'), findsOneWidget);
+
+        double top(Finder f) => tester.getTopLeft(f).dy;
+        expect(top(find.text('RM 1,780.00')), lessThan(top(find.text('7 Nov – 6 Dec'))));
+        expect(top(find.text('7 Nov – 6 Dec')), lessThan(top(find.text('spent this month'))));
+        expect(top(find.text('spent this month')), lessThan(top(food)));
+        if (size.width < 760) {
+          expect(top(food), lessThan(top(find.text('Today, 6:10 pm'))));
+        } else {
+          // Side by side: the month's breakdown and its transactions start level.
+          expect(top(find.byType(Panel).at(1)), top(find.byType(Panel).at(2)));
+        }
       });
 
-      testWidgets('categories open a full view with dropdowns of places', (tester) async {
+      testWidgets('categories open in full, with each one\'s places inside', (tester) async {
         await pumpApp(tester, size);
-        await tapVisible(tester, find.text('By category'));
-        expect(find.text('7 Nov – 6 Dec'), findsOneWidget); // the page's subtitle
-        expect(find.text('Food & Drinks'), findsOneWidget);
+        await tapVisible(tester, find.text('View all categories'));
+        expect(find.text('Categories'), findsOneWidget); // titled like the button that opened it
+        expect(find.text('7 Nov – 6 Dec'), findsOneWidget);
         expect(find.text('4 payments'), findsOneWidget);
-        expect(find.text('KANTIN PEJABAT'), findsNothing);
+        expect(find.text('Kantin Pejabat'), findsNothing);
 
         await tapVisible(tester, find.text('Food & Drinks'));
-        expect(find.text('KANTIN PEJABAT'), findsOneWidget);
+        expect(find.text('Kantin Pejabat'), findsOneWidget); // names in normal case
         expect(find.text('2 times'), findsOneWidget); // 2 canteen visits this month
 
         await tester.pageBack();
@@ -93,12 +118,25 @@ void main() {
         expect(find.text('RM 1,780.00'), findsOneWidget);
       });
 
+      testWidgets('the switch shows places instead of categories', (tester) async {
+        await pumpApp(tester, size);
+        expect(find.text('Grabfood'), findsNothing);
+        await tapVisible(tester, find.text('Places'));
+        expect(find.text('Grabfood'), findsOneWidget);
+        expect(find.text('1 time'), findsWidgets);
+        expect(find.text('View all categories'), findsNothing);
+
+        await tapVisible(tester, find.text('View all places'));
+        expect(find.text('Places'), findsOneWidget);
+        expect(find.text('KTM Berhad'), findsOneWidget); // short codes stay in capitals
+      });
+
       testWidgets('all transactions are grouped by day, with the time, category and notes on their own lines', (
         tester,
       ) async {
         await pumpApp(tester, size);
-        await tapVisible(tester, find.text('Transactions'));
-        expect(find.text('All transactions'), findsOneWidget);
+        await tapVisible(tester, find.text('View all transactions'));
+        expect(find.text('Transactions'), findsOneWidget);
         expect(find.text('7 Nov – 6 Dec · 6 transactions'), findsOneWidget);
         expect(find.text('Today'), findsOneWidget);
         expect(find.text('RM 24.60'), findsOneWidget); // spent today
@@ -109,29 +147,73 @@ void main() {
         expect(find.textContaining('Card transaction of'), findsNothing); // boilerplate hidden
       });
 
-      testWidgets('a past month shows only what was spent', (tester) async {
+      testWidgets('an earlier month shows only that month, with a way back', (tester) async {
         await pumpApp(tester, size);
-        await tester.tap(find.text('7 Nov – 6 Dec'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('7 Oct – 6 Nov').last);
-        await tester.pumpAndSettle();
-        expect(find.text('spent in 7 Oct – 6 Nov'), findsOneWidget);
-        expect(find.textContaining('left until'), findsNothing);
-        expect(find.text('per day'), findsNothing);
+        await openMonth(tester, '7 Oct – 6 Nov');
+        expect(find.text('spent that month'), findsOneWidget);
+        expect(find.text('RM 353.30'), findsOneWidget);
+        expect(find.textContaining('left until'), findsNothing); // the wallet is about today
+        expect(find.text('to spend a day'), findsNothing);
+        expect(find.text('AI & software'), findsWidgets); // not lost in "Other"
+
+        await tapVisible(tester, find.text('Back to current month'));
+        expect(find.text('left until 22 Nov'), findsOneWidget);
+        expect(find.text('Back to current month'), findsNothing);
       });
 
       testWidgets('text at 200% still fits everywhere', (tester) async {
         await pumpApp(tester, size, textScale: 2);
         expect(find.text('RM 1,780.00'), findsOneWidget);
-        await tapVisible(tester, find.text('By category'));
+        await tapVisible(tester, find.text('View all categories'));
         await tapVisible(tester, find.text('Food & Drinks'));
         await tester.pageBack();
         await tester.pumpAndSettle();
-        await tapVisible(tester, find.text('Transactions'));
+        await tapVisible(tester, find.text('Places'));
+        await tapVisible(tester, find.text('View all places'));
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await tapVisible(tester, find.text('View all transactions'));
         expect(find.text('Today'), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await openMonth(tester, '7 Oct – 6 Nov');
+        expect(find.text('Back to current month'), findsOneWidget);
+        await tapVisible(tester, find.byTooltip('Settings', skipOffstage: false)); // scrolled away by now
+        await tester.ensureVisible(find.text('Disconnect'));
+        await tester.pumpAndSettle();
       });
     });
   }
+
+  testWidgets('back from an earlier month returns to the current one, not out of the app', (tester) async {
+    await pumpApp(tester, sizes['phone']!);
+    await openMonth(tester, '7 Oct – 6 Nov');
+    // What Android's back gesture sends.
+    final message = const JSONMethodCodec().encodeMethodCall(const MethodCall('popRoute'));
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage('flutter/navigation', message, (_) {});
+    await tester.pumpAndSettle();
+    expect(find.text('left until 22 Nov'), findsOneWidget);
+  });
+
+  testWidgets('Escape returns to the current month on desktop', (tester) async {
+    await pumpApp(tester, sizes['laptop']!);
+    await openMonth(tester, '7 Oct – 6 Nov');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('left until 22 Nov'), findsOneWidget);
+  });
+
+  testWidgets('changing the token keeps the how-to folded away', (tester) async {
+    await pumpApp(tester, sizes['phone']!);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change Wise token'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open wise.com and log in'), findsNothing);
+    await tester.tap(find.text('How to get a token'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open wise.com and log in'), findsOneWidget);
+  });
 
   testWidgets('first run asks for a token, then shows the dashboard', (tester) async {
     await pumpApp(tester, sizes['phone']!, token: null);

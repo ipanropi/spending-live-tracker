@@ -2,7 +2,7 @@
 
 ## What this is
 
-**There are two versions.** `app/` is the **native Flutter app** (Android, Windows, macOS), which is where work is heading: Irfan asked for one native codebase, lightweight and fast. The Go app at the repo root is the original laptop and hosted-website version. It stays until the Flutter app has worked with a real Wise token; after that, it can be retired. Both share the same money model and dashboard design, described below.
+**There are two versions.** `app/` is the **native Flutter app** (Android, Windows, macOS), which is where work is heading: Irfan asked for one native codebase, lightweight and fast. The Go app at the repo root is the original laptop and hosted-website version. It stays until the Flutter app has worked with a real Wise token; after that, it can be retired. Both share the same money model, described below. The Go dashboard keeps the original layout described under "How it works"; the Flutter dashboard was restructured on 2026-11-09 (see "Dashboard structure" in the Flutter section).
 
 Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser. It runs either on his laptop or, in hosted mode, as a private password-protected website for his other devices (Android, Windows, sometimes a Mac). It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
 
@@ -91,7 +91,7 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 
 ## The Flutter app (`app/`)
 
-**Status (2026-11-08):** built and tested here (`flutter analyze` clean, 72 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
+**Status (2026-11-09):** built and tested here (`flutter analyze` clean, 84 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
 
 **Why Flutter:** it was chosen over Compose Multiplatform, React Native, .NET MAUI, Tauri and Rust (Slint). It has the most mature single codebase across Android, Windows and macOS, compiles AOT, and Dart is close to TS and Kotlin. Rust was rejected for this app: a thin Android ecosystem (secure storage, widgets) and a steep curve for no felt speed gain.
 
@@ -119,17 +119,52 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Full lists:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
 - **Number fitting:** big numbers use `FittedBox(scaleDown)`, the Flutter equivalent of `fitNumbers()`.
 
+**Dashboard structure (2026-11-09).** Irfan wanted the layout itself to make sense, not just look good. He shared a ChatGPT critique, which matched an audit done here. Its diagnosis: too many elements had similar visual weight, and there was no clear reading order. The dashboard now reads top to bottom in the order the questions come up:
+1. **Top bar:** "Updated …" status, ↻ and ⚙ (settings). No title: status is read-only, so it goes where it's seen.
+2. **Wallet panel** (`_WalletPanel`): one panel, not three cards, because the figures answer one question.
+   - "left until 22 Nov" is the hero. Below a divider come "to spend a day" (was "per day", which read as either spend or can spend) and "spent this week" / "since Mon, 2 Nov".
+   - The "since" line exists because just after payday the calendar week includes spending from before payday, so week > month looked like a bug.
+   - The two smaller figures stack at text scale ≥ 1.5. On wide screens all three sit in one row with vertical dividers.
+3. **Month picker** (`_MonthPicker`): it heads the month section and no longer titles the screen, because it only controls what's below it, never the wallet. It's a heading and a button, at least 48dp.
+4. **Month panel** (`_MonthPanel`):
+   - spent this month, then the average;
+   - a **Categories | Places** `ChoiceSwitch` that replaced two separate cards, to shorten the page (it adds a tap to compare the two);
+   - the top 3 rows and "View all categories" / "View all places".
+5. **Transactions panel:** the latest 3 and "View all transactions".
+
+On wide screens (≥ 760) the month panel and the transactions panel sit side by side at equal height (`IntrinsicHeight`).
+
+**Rules this structure depends on:**
+- **Scope:** everything below the month picker is that month. In an earlier month the wallet is replaced by **Back to current month**, because the wallet is about today. The system back gesture (`PopScope`) and Escape also return there.
+- **No silent mode:** `AppController.appResumed()` returns to the current month after `staleAfter` (5 min) in the background (`onHide` → `onResume`). Before this, an old month stuck around and hid the wallet on the next quick check.
+- **Explicit actions:** panels aren't tappable; the `ViewAllButton` labels name the destination, and the detail pages are titled the same (Categories, Places, Transactions). The detail page's month line is the first list item, not in the app bar, so it can wrap at any text size.
+- **› means another page; ⌄/⌃ means expands here** (category dropdowns).
+- **`ChoiceSwitch`, not `SegmentedButton`:**
+  - Flutter's SegmentedButton is 32px under desktop density.
+  - Its intrinsic height leaves out its tap-target padding, which overflowed the equal-height panels at 200% text.
+  - Its segments don't stretch to a fixed box.
+  - ChoiceSwitch is exactly 48dp everywhere, measures true, and its semantics say which option is selected.
+- **Panel** is a `Material`, so button ripples show on it. Inside a panel, a `DecoratedBox` would hide them.
+
 **UI/UX rules applied (Irfan asked for design principles to be researched and applied; keep them):**
-- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width, and the gap between cards is 12/16. Don't add one-off values.
-- **Type ramp:** `Styles` in `ui/theme.dart`. Big numbers are `MoneyText`: the digits big and "RM" at half size and 70% opacity, so the eye lands on the value.
-- **Number line:** overview numbers sit in a fixed-height line, `SizedBox` plus `FittedBox`, with text scaling capped at 1.3× for the numbers only. This keeps cards that share a height (`IntrinsicHeight`) from overflowing at 200% text. All other text scales fully.
-- **48dp targets** (Fitts's law, Material): includes the month picker.
+- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width, and the gap between cards is 12/16. The gap between the wallet and the month section is 24 plus the picker's own height, bigger than any gap inside either, so the two horizons read as separate groups. Don't add one-off values.
+- **Type ramp:** `Styles` in `ui/theme.dart`. Big numbers are `MoneyText`: the ringgit big, with "RM" at half size and the cents at 0.6×, both at 81% opacity so the eye lands on the value. 81% is the lowest opacity that keeps the red at 4.5:1 contrast; 70% measured 3.70:1.
+- **Number line:** big numbers (`Figure`) sit in a fixed-height line, `SizedBox` plus `FittedBox`, with text scaling capped at 1.3× for the numbers only. All other text scales fully.
+- **Merchant names:** `displayName()` shows Wise's capitals in normal case ("Kantin Pejabat", "Grab Ride"). Codes without vowels (KTM, KFC) and words with digits stay as they are. This is display only; grouping uses the raw name.
+- **48dp targets** (Fitts's law, Material): includes the month picker, the switch and the View all buttons.
 - **Visibility of status:** `updatedLabel()` shows "Updated just now / 5 min ago / 9:05 am / Yesterday, 9:30 pm" and refreshes itself every 30 s.
 - **Perceived speed:** the first load shows a `Skeleton` in the dashboard's shape, not a spinner. It stays still under "reduce motion", as do the dropdown and month fade (`context.reduceMotion`). The header's refresh spinner keeps moving as essential progress.
 - **Recognition over recall:** `dayLabel()` and `whenLabel()` give "Today, 2:15 pm" and "Yesterday". All transactions are grouped by day under "Today · RM 24.60" headers, so rows show only the time (Gestalt proximity).
 - **Errors:** `Notice` shows a title ("Couldn't reach Wise"), the reason, and "Showing saved data from …", one per line, with the fix as a button.
-- **Accessibility:** card titles, day headers and the month are `Heading`s (screen-reader headings). Overview cards read as one sentence. Tests run at 200% text on three screen sizes.
-- **Native feel (Jakob's law):** a selection haptic on month change and category expand, a short fade when switching months, and the system back gesture.
+- **Accessibility:**
+  - Panel titles, day headers and the month picker are `Heading`s (screen-reader headings).
+  - Each `Figure` reads as one sentence.
+  - Tests run at 200% text on three screen sizes, including the settings sheet, which scrolls.
+- **Native feel (Jakob's law):**
+  - A selection haptic on month change, the Categories | Places switch and category expand.
+  - A short fade when switching months.
+  - The system back gesture.
+- **Setup:** first run shows the four token steps. "Change Wise token" folds them behind "How to get a token", because you've done it before.
 
 **Platform details that matter:**
 - **Android:**
@@ -160,7 +195,9 @@ The Go workflow (`build.yml`) ignores changes under `app/`.
 - **Widget tests:** set `WidgetController.hitTestWarningShouldBeFatal = true`, and scroll with `tapVisible()` before tapping.
 - **Screenshots:** copy `app/` to a scratch folder, run `flutter create --platforms web .` there, and build with `--dart-define=FAKE_DATA=true --no-web-resources-cdn`. Don't commit a web folder: Irfan doesn't want a web app. Add `SemanticsBinding.instance.ensureSemantics()` in the copy to drive it through the accessibility tree.
 
-**Categories:** the same rules as the Go app, plus canteen keywords (kantin, canteen, warung, gerai, medan selera), because Irfan eats at his workplace canteen and those payments were landing in "Other". The Go `categories` list has them too.
+**Categories:** the same rules as the Go app, plus:
+- **Canteen keywords** (kantin, canteen, warung, gerai, medan selera), because Irfan eats at his workplace canteen and those payments were landing in "Other". The Go `categories` list has them too.
+- **"AI & software"** (Anthropic, OpenAI, GitHub, iCloud, Microsoft and similar). AI subscriptions are on his watch list, and they were the biggest share of "Other". This one is Flutter only.
 
 ## Build, run, test (Go app)
 

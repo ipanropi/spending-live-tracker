@@ -47,6 +47,22 @@ void main() {
     expect(cycleLabel(DateTime(2026, 12, 7), now: now), '7 Dec – 6 Jan 2027');
   });
 
+  test('merchant names in normal case, with short codes and numbers kept', () {
+    expect(displayName('KANTIN PEJABAT'), 'Kantin Pejabat');
+    expect(displayName('GRAB*RIDE'), 'Grab Ride');
+    expect(displayName('KTM BERHAD'), 'KTM Berhad');
+    expect(displayName('99 SPEEDMART 2210'), '99 Speedmart 2210');
+    expect(displayName('NETFLIX.COM'), 'Netflix.com');
+    expect(displayName('Ali Bin Abu'), 'Ali Bin Abu'); // already mixed case: left alone
+  });
+
+  test('since when a running total started', () {
+    final now = DateTime(2026, 11, 8, 15);
+    expect(sinceLabel(DateTime(2026, 11, 2), now: now), 'since Mon, 2 Nov');
+    expect(sinceLabel(DateTime(2026, 11, 7), now: now), 'since yesterday');
+    expect(sinceLabel(DateTime(2026, 11, 8), now: now), 'since today');
+  });
+
   test('plural', () {
     expect(plural(1, 'time'), '1 time');
     expect(plural(3, 'time'), '3 times');

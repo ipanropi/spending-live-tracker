@@ -21,6 +21,10 @@ class _SetupPageState extends State<SetupPage> {
   bool _busy = false;
   String? _error;
 
+  // First time, the steps are the point. When changing a token you've done it
+  // before, so they fold away behind one tap.
+  late bool _showSteps = !widget.replacing;
+
   @override
   void dispose() {
     _token.dispose();
@@ -76,10 +80,20 @@ class _SetupPageState extends State<SetupPage> {
                     style: Styles.body,
                   ),
                   const SizedBox(height: 20),
-                  const _Step(1, 'Open wise.com and log in'),
-                  const _Step(2, 'Go to Settings, then Integrations and tools, then API tokens'),
-                  const _Step(3, 'Add a new token with Read only access'),
-                  const _Step(4, 'Copy it and paste it below'),
+                  if (_showSteps) ...const [
+                    _Step(1, 'Open wise.com and log in'),
+                    _Step(2, 'Go to Settings, then Integrations and tools, then API tokens'),
+                    _Step(3, 'Add a new token with Read only access'),
+                    _Step(4, 'Copy it and paste it below'),
+                  ] else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => setState(() => _showSteps = true),
+                        icon: const Icon(Icons.expand_more),
+                        label: const Text('How to get a token'),
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   TextField(
                     controller: _token,

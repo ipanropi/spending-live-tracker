@@ -38,6 +38,13 @@ const List<(String, List<String>)> categoryRules = [
       'air selangor',
     ],
   ),
+  (
+    'AI & software',
+    [
+      'anthropic', 'claude.ai', 'openai', 'chatgpt', 'github', 'cursor', 'google one', 'google storage', 'icloud', //
+      'apple.com/bill', 'microsoft', 'notion', 'canva', 'figma',
+    ],
+  ),
   ('Entertainment', ['netflix', 'spotify', 'youtube', 'disney', 'gsc', 'tgv', 'mbo', 'steam', 'playstation', 'roblox']),
 ];
 

@@ -45,6 +45,7 @@ void main() {
     expect(today.daysLeft, 14);
     expect(today.perDayCents, 2611); // RM 365.60 / 14, rounded down
     expect(today.weekCents, 1250 + 650 + 2500 + 990 + 4890); // since Monday 2 Nov, across cycles
+    expect(today.weekStart, DateTime(2026, 11, 2));
   });
 
   test('a past cycle has no "today" and averages over the whole cycle', () {
