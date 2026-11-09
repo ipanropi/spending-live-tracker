@@ -43,6 +43,9 @@ abstract final class Styles {
   /// Screen and sheet titles.
   static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
 
+  /// Section headings, a level above card titles: the month picker.
+  static const section = TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Palette.text, height: 1.25);
+
   /// Card titles, and day headers in lists.
   static const sectionTitle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
 

@@ -55,6 +55,9 @@ void main() {
     if (settle) await tester.pumpAndSettle();
   }
 
+  /// The card a piece of text sits in.
+  Finder card(String text) => find.ancestor(of: find.text(text), matching: find.byType(Panel));
+
   Future<void> openMonth(WidgetTester tester, String label) async {
     await tapVisible(tester, find.byTooltip('Choose month'));
     await tester.tap(find.text(label).last);
@@ -96,9 +99,29 @@ void main() {
         if (size.width < 760) {
           expect(top(food), lessThan(top(find.text('Today, 6:10 pm'))));
         } else {
-          // Side by side: the month's breakdown and its transactions start level.
-          expect(top(find.byType(Panel).at(1)), top(find.byType(Panel).at(2)));
+          // Side by side: the month's total and its transactions start level.
+          expect(top(card('spent this month')), top(card('Transactions')));
         }
+      });
+
+      testWidgets('each card holds one thing; groups come from spacing', (tester) async {
+        await pumpApp(tester, size);
+        const facts = [
+          'left until 22 Nov',
+          'to spend a day',
+          'spent this week',
+          'spent this month',
+          'View all categories',
+          'View all transactions',
+        ];
+        expect({for (final fact in facts) tester.element(card(fact))}.length, facts.length);
+        // Cards in a group sit closer together than the two groups do.
+        final wallet = tester.getRect(card('left until 22 Nov'));
+        final pace = tester.getRect(card('to spend a day'));
+        final month = tester.getRect(card('spent this month'));
+        final inGroup = size.width < 760 ? pace.top - wallet.bottom : pace.left - wallet.right;
+        final betweenGroups = month.top - pace.bottom;
+        expect(betweenGroups, greaterThan(inGroup * 2));
       });
 
       testWidgets('categories open in full, with each one\'s places inside', (tester) async {

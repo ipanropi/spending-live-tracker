@@ -91,7 +91,7 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 
 ## The Flutter app (`app/`)
 
-**Status (2026-11-09):** built and tested here (`flutter analyze` clean, 84 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
+**Status (2026-11-09):** built and tested here (`flutter analyze` clean, 87 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
 
 **Why Flutter:** it was chosen over Compose Multiplatform, React Native, .NET MAUI, Tauri and Rust (Slint). It has the most mature single codebase across Android, Windows and macOS, compiles AOT, and Dart is close to TS and Kotlin. Rust was rejected for this app: a thin Android ecosystem (secure storage, widgets) and a steep curve for no felt speed gain.
 
@@ -119,20 +119,30 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - **Full lists:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
 - **Number fitting:** big numbers use `FittedBox(scaleDown)`, the Flutter equivalent of `fitNumbers()`.
 
-**Dashboard structure (2026-11-09).** Irfan wanted the layout itself to make sense, not just look good. He shared a ChatGPT critique, which matched an audit done here. Its diagnosis: too many elements had similar visual weight, and there was no clear reading order. The dashboard now reads top to bottom in the order the questions come up:
-1. **Top bar:** "Updated …" status, ↻ and ⚙ (settings). No title: status is read-only, so it goes where it's seen.
-2. **Wallet panel** (`_WalletPanel`): one panel, not three cards, because the figures answer one question.
-   - "left until 22 Nov" is the hero. Below a divider come "to spend a day" (was "per day", which read as either spend or can spend) and "spent this week" / "since Mon, 2 Nov".
-   - The "since" line exists because just after payday the calendar week includes spending from before payday, so week > month looked like a bug.
-   - The two smaller figures stack at text scale ≥ 1.5. On wide screens all three sit in one row with vertical dividers.
-3. **Month picker** (`_MonthPicker`): it heads the month section and no longer titles the screen, because it only controls what's below it, never the wallet. It's a heading and a button, at least 48dp.
-4. **Month panel** (`_MonthPanel`):
-   - spent this month, then the average;
-   - a **Categories | Places** `ChoiceSwitch` that replaced two separate cards, to shorten the page (it adds a tap to compare the two);
-   - the top 3 rows and "View all categories" / "View all places".
-5. **Transactions panel:** the latest 3 and "View all transactions".
+**Dashboard structure (2026-11-09).** Irfan wanted the layout itself to make sense, not just look good. He shared a ChatGPT critique, which matched an audit done here. Its diagnosis: too many elements had similar visual weight, and there was no clear reading order.
 
-On wide screens (≥ 760) the month panel and the transactions panel sit side by side at equal height (`IntrinsicHeight`).
+**Irfan's rule: one card, one piece of information.** He has said it twice:
+- on the web app: "not combined together inside 1 card";
+- on 2026-11-09: "I don't like how 1 card have 3 different information".
+
+So group with **spacing and section headings, never by putting different figures in one card**. A round that followed ChatGPT's "one wallet panel" broke this rule and was undone the same day.
+
+The dashboard reads top to bottom in the order the questions come up:
+1. **Top bar:** "Updated …" status, ↻ and ⚙ (settings). No title: status is read-only, so it goes where it's seen.
+2. **Wallet group** (`_WalletSection`), three cards:
+   - **Left until payday** is the hero: full width, and the biggest number on the screen.
+   - Under it, side by side: **to spend a day** (was "per day", which read as either spend or can spend) and **spent this week** / "since Mon, 2 Nov".
+   - The "since" line exists because just after payday the calendar week includes spending from before payday, so week > month looked like a bug.
+   - The two small cards stack at text scale ≥ 1.5. On wide screens all three sit in one row, the hero at double width.
+3. **Month picker** (`_MonthPicker`): it heads the month group and no longer titles the screen, because it only controls what's below it, never the wallet. It's a heading (`Styles.section`, 20px, a level above card titles) and a button, at least 48dp.
+4. **Month group** (`_MonthSection`), three cards:
+   - **spent this month**, with the average;
+   - **where it went** (`_BreakdownCard`): a Categories | Places `ChoiceSwitch` that replaced two separate cards (it costs a tap to compare the two), the top 3 rows, and "View all categories" / "View all places";
+   - **transactions**: the latest 3 and "View all transactions".
+
+   On wide screens (≥ 760) the spent card sits above the breakdown, with transactions beside them at equal height (`IntrinsicHeight`).
+
+**Spacing does the grouping:** `_inGroup` (12) between cards in a group, and `Space.xxl` (32) plus the picker's own height between the groups. A test checks that the gap between groups is more than twice the gap inside one, and that the six facts sit in six different cards.
 
 **Rules this structure depends on:**
 - **Scope:** everything below the month picker is that month. In an earlier month the wallet is replaced by **Back to current month**, because the wallet is about today. The system back gesture (`PopScope`) and Escape also return there.
@@ -147,7 +157,7 @@ On wide screens (≥ 760) the month panel and the transactions panel sit side by
 - **Panel** is a `Material`, so button ripples show on it. Inside a panel, a `DecoratedBox` would hide them.
 
 **UI/UX rules applied (Irfan asked for design principles to be researched and applied; keep them):**
-- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width, and the gap between cards is 12/16. The gap between the wallet and the month section is 24 plus the picker's own height, bigger than any gap inside either, so the two horizons read as separate groups. Don't add one-off values.
+- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width. On the dashboard, cards in a group are 12 apart and the groups 32 apart. In the detail pages, rows have 16 above and below. Don't add one-off values.
 - **Type ramp:** `Styles` in `ui/theme.dart`. Big numbers are `MoneyText`: the ringgit big, with "RM" at half size and the cents at 0.6×, both at 81% opacity so the eye lands on the value. 81% is the lowest opacity that keeps the red at 4.5:1 contrast; 70% measured 3.70:1.
 - **Number line:** big numbers (`Figure`) sit in a fixed-height line, `SizedBox` plus `FittedBox`, with text scaling capped at 1.3× for the numbers only. All other text scales fully.
 - **Merchant names:** `displayName()` shows Wise's capitals in normal case ("Kantin Pejabat", "Grab Ride"). Codes without vowels (KTM, KFC) and words with digits stay as they are. This is display only; grouping uses the raw name.
@@ -157,7 +167,7 @@ On wide screens (≥ 760) the month panel and the transactions panel sit side by
 - **Recognition over recall:** `dayLabel()` and `whenLabel()` give "Today, 2:15 pm" and "Yesterday". All transactions are grouped by day under "Today · RM 24.60" headers, so rows show only the time (Gestalt proximity).
 - **Errors:** `Notice` shows a title ("Couldn't reach Wise"), the reason, and "Showing saved data from …", one per line, with the fix as a button.
 - **Accessibility:**
-  - Panel titles, day headers and the month picker are `Heading`s (screen-reader headings).
+  - Card titles, day headers and the month picker are `Heading`s (screen-reader headings).
   - Each `Figure` reads as one sentence.
   - Tests run at 200% text on three screen sizes, including the settings sheet, which scrolls.
 - **Native feel (Jakob's law):**

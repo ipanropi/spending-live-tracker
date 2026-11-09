@@ -183,19 +183,26 @@ class _ErrorNotice extends StatelessWidget {
   }
 }
 
+/// Cards in one group sit this close; groups sit [Space.xxl] apart. The grouping
+/// comes from spacing, so each card can hold one thing (Irfan's rule: one card,
+/// one piece of information).
+const double _inGroup = Space.m;
+
 /// The dashboard's shape while the first data loads.
 class _LoadingBody extends StatelessWidget {
   const _LoadingBody();
 
   @override
   Widget build(BuildContext context) {
-    const figure = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SkeletonBox(width: 0.7, height: 26),
-        SizedBox(height: Space.s),
-        SkeletonBox(width: 0.6, height: 12),
-      ],
+    const figure = Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: 0.7, height: 26),
+          SizedBox(height: Space.s),
+          SkeletonBox(width: 0.6, height: 12),
+        ],
+      ),
     );
     return Skeleton(
       child: Column(
@@ -210,29 +217,27 @@ class _LoadingBody extends StatelessWidget {
                 SkeletonBox(width: 0.4, height: 14),
                 SizedBox(height: Space.s),
                 SkeletonBox(width: 0.3, height: 12),
-                SizedBox(height: Space.l),
-                Divider(),
-                SizedBox(height: Space.l),
-                Row(
-                  children: [
-                    Expanded(child: figure),
-                    SizedBox(width: Space.l),
-                    Expanded(child: figure),
-                  ],
-                ),
               ],
             ),
           ),
-          const SizedBox(height: Space.xl),
-          const SkeletonBox(width: 0.4, height: 20),
+          const SizedBox(height: _inGroup),
+          const Row(
+            children: [
+              Expanded(child: figure),
+              SizedBox(width: _inGroup),
+              Expanded(child: figure),
+            ],
+          ),
+          const SizedBox(height: Space.xxl),
+          const SkeletonBox(width: 0.4, height: 22),
           const SizedBox(height: Space.l),
+          figure,
+          const SizedBox(height: _inGroup),
           Panel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SkeletonBox(width: 0.45, height: 26),
-                const SizedBox(height: Space.s),
-                const SkeletonBox(width: 0.35, height: 12),
+                const SkeletonBox(width: 1, height: 40),
                 for (var i = 0; i < 3; i++) ...const [
                   SizedBox(height: Space.xl),
                   SkeletonBox(width: 1, height: 14),
@@ -261,35 +266,13 @@ class _Body extends StatelessWidget {
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= _wideLayout;
         final today = summary.today;
-        final month = _MonthPanel(summary: summary, now: now, fill: wide);
-        final transactions = _TransactionsPanel(summary: summary, now: now, fill: wide);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (today != null) _WalletPanel(today: today, now: now, wide: wide) else _BackToCurrent(wide: wide),
-            // More space between "now" and "this month" than anywhere inside either.
-            const SizedBox(height: Space.xl),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _MonthPicker(cycles: cycles, selected: summary.start, now: now),
-            ),
-            const SizedBox(height: Space.s),
-            if (wide)
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: month),
-                    SizedBox(width: context.gap),
-                    Expanded(child: transactions),
-                  ],
-                ),
-              )
-            else ...[
-              month,
-              SizedBox(height: context.gap),
-              transactions,
-            ],
+            if (today != null) _WalletSection(today: today, now: now, wide: wide) else _BackToCurrent(wide: wide),
+            // Between the two groups: more space than between any two cards inside one.
+            const SizedBox(height: Space.xxl),
+            _MonthSection(summary: summary, cycles: cycles, now: now, wide: wide),
           ],
         );
       },
@@ -297,10 +280,11 @@ class _Body extends StatelessWidget {
   }
 }
 
-/// The wallet right now: left until payday, the most important number on the
-/// screen, then the pace. One panel, because the three answer one question.
-class _WalletPanel extends StatelessWidget {
-  const _WalletPanel({required this.today, required this.now, required this.wide});
+/// What's left until payday, then the pace: three cards, one fact each. They read
+/// as one group because they sit close together, not because they share a box.
+/// "Left" is the hero: full width and the biggest number on the screen.
+class _WalletSection extends StatelessWidget {
+  const _WalletSection({required this.today, required this.now, required this.wide});
 
   final Today today;
   final DateTime now;
@@ -309,66 +293,54 @@ class _WalletPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final balance = today.balanceCents;
-    final left = Figure(
-      hero: true,
-      cents: balance,
-      color: (balance ?? 0) < 0 ? Palette.spend : Palette.good,
-      lines: ['left until ${dayMonth(today.nextPayday)}', '${plural(today.daysLeft, 'day')} left'],
+    final left = Panel(
+      child: Figure(
+        hero: true,
+        cents: balance,
+        color: (balance ?? 0) < 0 ? Palette.spend : Palette.good,
+        lines: ['left until ${dayMonth(today.nextPayday)}', '${plural(today.daysLeft, 'day')} left'],
+      ),
     );
-    final perDay = Figure(cents: today.perDayCents, lines: const ['to spend a day']);
-    final week = Figure(
-      cents: today.weekCents,
-      color: Palette.spend,
-      lines: [
-        'spent this week',
-        sinceLabel(today.weekStart, now: now),
-      ],
+    final perDay = Panel(
+      child: Figure(cents: today.perDayCents, lines: const ['to spend a day']),
     );
-
-    if (wide) {
-      return Panel(
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(flex: 3, child: left),
-              const VerticalDivider(width: Space.xxl),
-              Expanded(flex: 2, child: perDay),
-              const VerticalDivider(width: Space.xxl),
-              Expanded(flex: 2, child: week),
-            ],
-          ),
-        ),
-      );
-    }
-    // With large text the two smaller figures stack instead of squeezing side by side.
-    final stack = MediaQuery.textScalerOf(context).scale(10) >= 15;
-    return Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          left,
-          const SizedBox(height: Space.l),
-          const Divider(),
-          const SizedBox(height: Space.l),
-          if (stack) ...[
-            perDay,
-            const SizedBox(height: Space.l),
-            week,
-          ] else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: perDay),
-                const SizedBox(width: Space.l),
-                Expanded(child: week),
-              ],
-            ),
+    final week = Panel(
+      child: Figure(
+        cents: today.weekCents,
+        color: Palette.spend,
+        lines: [
+          'spent this week',
+          sinceLabel(today.weekStart, now: now),
         ],
       ),
     );
+
+    if (wide) return _row([(2, left), (1, perDay), (1, week)]);
+    // With large text the two smaller cards stack instead of squeezing side by side.
+    final stack = MediaQuery.textScalerOf(context).scale(10) >= 15;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        left,
+        const SizedBox(height: _inGroup),
+        if (stack) ...[perDay, const SizedBox(height: _inGroup), week] else _row([(1, perDay), (1, week)]),
+      ],
+    );
   }
 }
+
+/// Cards side by side at one height, each taking its share (flex) of the width.
+Widget _row(List<(int, Widget)> cards) => IntrinsicHeight(
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (var i = 0; i < cards.length; i++) ...[
+        if (i > 0) const SizedBox(width: _inGroup),
+        Expanded(flex: cards[i].$1, child: cards[i].$2),
+      ],
+    ],
+  ),
+);
 
 /// In an earlier month the wallet isn't shown, since it's about today. This is the
 /// way back, in the same place.
@@ -428,7 +400,7 @@ class _MonthPicker extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
-                child: Heading(cycleLabel(selected, now: now), style: Styles.title),
+                child: Heading(cycleLabel(selected, now: now), style: Styles.section),
               ),
               const SizedBox(width: Space.xs),
               const Icon(Icons.expand_more, color: Palette.muted),
@@ -440,81 +412,136 @@ class _MonthPicker extends StatelessWidget {
   }
 }
 
+/// The month, under its picker: what it cost, where it went, and the transactions
+/// behind it. Three cards, one fact each, in that reading order.
+class _MonthSection extends StatelessWidget {
+  const _MonthSection({required this.summary, required this.cycles, required this.now, required this.wide});
+
+  final CycleSummary summary;
+  final List<DateTime> cycles;
+  final DateTime now;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = summary;
+    final spent = Panel(
+      child: Figure(
+        cents: s.spentCents,
+        color: Palette.spend,
+        lines: [s.isCurrent ? 'spent this month' : 'spent that month', 'avg ${rm(s.avgPerDayCents)} a day'],
+      ),
+    );
+    final breakdown = _BreakdownCard(summary: s, now: now, fill: wide);
+    final transactions = _TransactionsCard(summary: s, now: now, fill: wide);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _MonthPicker(cycles: cycles, selected: s.start, now: now),
+        ),
+        const SizedBox(height: Space.s),
+        if (wide)
+          // The total and where it went on the left, the transactions beside them.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      spent,
+                      const SizedBox(height: _inGroup),
+                      Expanded(child: breakdown),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: _inGroup),
+                Expanded(child: transactions),
+              ],
+            ),
+          )
+        else ...[
+          spent,
+          const SizedBox(height: _inGroup),
+          breakdown,
+          const SizedBox(height: _inGroup),
+          transactions,
+        ],
+      ],
+    );
+  }
+}
+
 enum _Breakdown { categories, places }
 
-/// The month: what it cost, then where it went, by category or by place.
-class _MonthPanel extends StatefulWidget {
-  const _MonthPanel({required this.summary, required this.now, required this.fill});
+/// Where the month's money went, by category or by place: one card, switched
+/// between its two views, instead of two long lists.
+class _BreakdownCard extends StatefulWidget {
+  const _BreakdownCard({required this.summary, required this.now, required this.fill});
 
   final CycleSummary summary;
   final DateTime now;
 
-  /// Beside another panel of the same height: keep "View all" at the bottom.
+  /// Beside a card of the same height: keep "View all" at the bottom.
   final bool fill;
 
   @override
-  State<_MonthPanel> createState() => _MonthPanelState();
+  State<_BreakdownCard> createState() => _BreakdownCardState();
 }
 
-class _MonthPanelState extends State<_MonthPanel> {
+class _BreakdownCardState extends State<_BreakdownCard> {
   _Breakdown _by = _Breakdown.categories;
 
   @override
   Widget build(BuildContext context) {
     final s = widget.summary;
+    if (s.categories.isEmpty) {
+      return Panel(
+        child: Text(s.isCurrent ? 'No spending yet this month.' : 'No spending this month.', style: Styles.meta),
+      );
+    }
     final label = cycleLabel(s.start, now: widget.now);
     final byCategory = _by == _Breakdown.categories;
     return Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Figure(
-            cents: s.spentCents,
-            color: Palette.spend,
-            lines: [s.isCurrent ? 'spent this month' : 'spent that month', 'avg ${rm(s.avgPerDayCents)} a day'],
+          ChoiceSwitch<_Breakdown>(
+            options: const [(_Breakdown.categories, 'Categories'), (_Breakdown.places, 'Places')],
+            selected: _by,
+            onChanged: (by) {
+              HapticFeedback.selectionClick();
+              setState(() => _by = by);
+            },
           ),
-          const SizedBox(height: Space.l),
+          const SizedBox(height: Space.xs),
+          RowList(
+            rows: byCategory
+                ? [
+                    for (final cat in s.categories.take(_previewCount))
+                      InfoRow(
+                        name: cat.name,
+                        amount: rm(cat.cents),
+                        below: ShareBar(fraction: s.spentCents == 0 ? 0 : cat.cents / s.spentCents),
+                      ),
+                  ]
+                : [
+                    for (final p in s.places.take(_previewCount))
+                      InfoRow(name: p.name, amount: rm(p.cents), lines: [plural(p.count, 'time')]),
+                  ],
+          ),
+          if (widget.fill) const Spacer(),
           const Divider(),
-          const SizedBox(height: Space.l),
-          if (s.categories.isEmpty)
-            Text(s.isCurrent ? 'No spending yet this month.' : 'No spending this month.', style: Styles.meta)
-          else ...[
-            // One section for "where it went", switched between its two views,
-            // instead of two long lists in a row.
-            ChoiceSwitch<_Breakdown>(
-              options: const [(_Breakdown.categories, 'Categories'), (_Breakdown.places, 'Places')],
-              selected: _by,
-              onChanged: (by) {
-                HapticFeedback.selectionClick();
-                setState(() => _by = by);
-              },
+          ViewAllButton(
+            byCategory ? 'View all categories' : 'View all places',
+            onPressed: () => _open(
+              context,
+              byCategory ? CategoriesPage(summary: s, label: label) : PlacesPage(summary: s, label: label),
             ),
-            const SizedBox(height: Space.xs),
-            RowList(
-              rows: byCategory
-                  ? [
-                      for (final cat in s.categories.take(_previewCount))
-                        InfoRow(
-                          name: cat.name,
-                          amount: rm(cat.cents),
-                          below: ShareBar(fraction: s.spentCents == 0 ? 0 : cat.cents / s.spentCents),
-                        ),
-                    ]
-                  : [
-                      for (final p in s.places.take(_previewCount))
-                        InfoRow(name: p.name, amount: rm(p.cents), lines: [plural(p.count, 'time')]),
-                    ],
-            ),
-            if (widget.fill) const Spacer(),
-            const Divider(),
-            ViewAllButton(
-              byCategory ? 'View all categories' : 'View all places',
-              onPressed: () => _open(
-                context,
-                byCategory ? CategoriesPage(summary: s, label: label) : PlacesPage(summary: s, label: label),
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -522,8 +549,8 @@ class _MonthPanelState extends State<_MonthPanel> {
 }
 
 /// The month's transactions, newest first: the latest few here, all of them one tap away.
-class _TransactionsPanel extends StatelessWidget {
-  const _TransactionsPanel({required this.summary, required this.now, required this.fill});
+class _TransactionsCard extends StatelessWidget {
+  const _TransactionsCard({required this.summary, required this.now, required this.fill});
 
   final CycleSummary summary;
   final DateTime now;
