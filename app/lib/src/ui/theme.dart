@@ -14,7 +14,18 @@ abstract final class Palette {
   static const accent = Color(0xFF2563EB);
   static const bar = Color(0xFF3987E5);
   static const good = Color(0xFF4ADE80);
+
+  /// Spending faster than an even pace, or more than last month: a caution, not an alarm.
+  static const warn = Color(0xFFFBBF24);
+
+  /// Below zero. Red is kept for this, so it still means something when it shows.
   static const spend = Color(0xFFF87171);
+
+  /// The square behind a category icon.
+  static const tile = Color(0xFF242422);
+
+  /// The tab bar and side rail.
+  static const nav = Color(0xFF161615);
   static const errorBg = Color(0xFF2A1515);
   static const errorLine = Color(0xFF5C2424);
   static const errorText = Color(0xFFFCA5A5);
@@ -37,16 +48,16 @@ abstract final class Space {
   static const double xxl = 32;
 }
 
-/// The type ramp. Big numbers come from [Spacing.heroSize] and [Spacing.statSize];
+/// The type ramp. Big numbers come from [Spacing.heroSize];
 /// everything else is one of these, so sizes stay consistent screen to screen.
 abstract final class Styles {
   /// Screen and sheet titles.
   static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
 
-  /// Section headings, a level above card titles: the month picker.
-  static const section = TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Palette.text, height: 1.25);
+  /// A screen's own title: Now, Activity, Spending.
+  static const screenTitle = TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Palette.text, height: 1.25);
 
-  /// Card titles, and day headers in lists.
+  /// Section and card titles, and day headers in lists.
   static const sectionTitle = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.text, height: 1.3);
 
   static const rowName = TextStyle(fontSize: 15, color: Palette.text, height: 1.35);
@@ -71,8 +82,8 @@ extension Spacing on BuildContext {
   /// Padding inside cards.
   double get pad => _width < 380 ? Space.l : (_width < 600 ? 20 : Space.xl);
 
-  /// Space between cards.
-  double get gap => _width < 380 ? Space.m : Space.l;
+  /// Text set large enough (1.5× and up) that side-by-side rows should stack instead.
+  bool get largeText => MediaQuery.textScalerOf(this).scale(10) >= 15;
 
   /// True when the user asked the system for less motion.
   bool get reduceMotion => MediaQuery.disableAnimationsOf(this);
@@ -80,11 +91,8 @@ extension Spacing on BuildContext {
   /// Side padding that keeps content at most [maxWidth] wide, centred.
   double sidePad(double maxWidth) => math.max(16, (_width - maxWidth) / 2);
 
-  /// Size for the big "left" number: scales with the screen, within limits.
+  /// Size for a screen's headline number: scales with the screen, within limits.
   double get heroSize => (_width * 0.11).clamp(36, 48);
-
-  /// Size for the other overview numbers.
-  double get statSize => (_width * 0.062).clamp(22, 30);
 }
 
 ThemeData buildTheme() {
@@ -159,5 +167,64 @@ ThemeData buildTheme() {
       shape: _shape,
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(color: Palette.bar),
+    // Filter chips: a quiet outline, filled when selected.
+    chipTheme: const ChipThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: corners,
+        side: BorderSide(color: Palette.line),
+      ),
+      side: BorderSide(color: Palette.line),
+      backgroundColor: Palette.bg,
+      selectedColor: Palette.line,
+      checkmarkColor: Palette.text,
+      labelStyle: TextStyle(fontSize: 14, color: Palette.text),
+      padding: EdgeInsets.symmetric(horizontal: Space.xs),
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      fillColor: Palette.card,
+      hintStyle: TextStyle(color: Palette.muted),
+      border: OutlineInputBorder(
+        borderRadius: corners,
+        borderSide: BorderSide(color: Palette.line),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: corners,
+        borderSide: BorderSide(color: Palette.line),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: corners,
+        borderSide: BorderSide(color: Palette.bar, width: 2),
+      ),
+    ),
+    // Phones: a tab bar at the bottom, where thumbs reach. Wider windows: a rail on the left.
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: Palette.nav,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: Palette.line,
+      indicatorShape: _shape,
+      height: 72,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          fontSize: 12,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+          color: states.contains(WidgetState.selected) ? Palette.text : Palette.muted,
+        ),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(color: states.contains(WidgetState.selected) ? Palette.text : Palette.muted),
+      ),
+    ),
+    navigationRailTheme: const NavigationRailThemeData(
+      backgroundColor: Palette.nav,
+      indicatorColor: Palette.line,
+      indicatorShape: _shape,
+      labelType: NavigationRailLabelType.all,
+      selectedIconTheme: IconThemeData(color: Palette.text),
+      unselectedIconTheme: IconThemeData(color: Palette.muted),
+      selectedLabelTextStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Palette.text),
+      unselectedLabelTextStyle: TextStyle(fontSize: 12, color: Palette.muted),
+    ),
   );
 }

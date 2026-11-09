@@ -42,7 +42,7 @@ void main() {
     expect(await c.connect('  good  '), isNull);
     expect(tokens.value, 'good');
     expect(c.phase, Phase.ready);
-    expect(c.summary!.today!.balanceCents, 178000);
+    expect(c.period!.balanceCents, 178000);
     expect(cache.value, isNotNull);
   });
 
@@ -94,34 +94,38 @@ void main() {
     expect(c.summary!.isCurrent, isTrue);
   });
 
-  test('after a while away, the app is back on the current month', () async {
+  test('after a while away, the app opens on Now and the current month', () async {
     tokens.value = 'good';
     final c = controller();
     await c.start();
-    c.selectCycle(DateTime(2026, 10, 7));
+    c
+      ..selectTab(AppTab.spending)
+      ..selectCycle(DateTime(2026, 10, 7));
     expect(c.showingCurrent, isFalse);
 
     // A quick look at another app keeps your place.
     c.appHidden();
     clock = testNow.add(const Duration(minutes: 2));
     await c.appResumed();
+    expect(c.tab, AppTab.spending);
     expect(c.showingCurrent, isFalse);
 
-    // Back later: the current month, so a quick check shows what's left.
+    // Back later: a fresh "how am I doing?".
     c.appHidden();
     clock = testNow.add(const Duration(minutes: 10));
     await c.appResumed();
+    expect(c.tab, AppTab.now);
     expect(c.showingCurrent, isTrue);
-    expect(c.summary!.today, isNotNull);
   });
 
   test('"days left" moves on at midnight without new data', () async {
     tokens.value = 'good';
     final c = controller();
     await c.start();
-    expect(c.summary!.today!.daysLeft, 14);
+    expect(c.period!.daysLeft, 14);
     clock = DateTime(2026, 11, 9, 0, 5);
-    expect(c.summary!.today!.daysLeft, 13);
+    expect(c.period!.daysLeft, 13);
+    expect(c.period!.today, isEmpty); // a new day starts with nothing spent
   });
 
   test('disconnect forgets the token and the cached data', () async {
@@ -133,5 +137,6 @@ void main() {
     expect(cache.value, isNull);
     expect(c.phase, Phase.needsToken);
     expect(c.summary, isNull);
+    expect(c.period, isNull);
   });
 }

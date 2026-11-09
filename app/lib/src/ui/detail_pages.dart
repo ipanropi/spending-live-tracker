@@ -1,185 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../domain/cycles.dart';
 import '../domain/format.dart';
-import '../domain/models.dart';
 import '../domain/summary.dart';
-import 'dashboard_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 const double _maxWidth = 760;
 
-/// A full list for one month, opened from a dashboard card. Items are built
-/// lazily, so long months scroll smoothly.
-class _ListPage extends StatelessWidget {
-  const _ListPage({
-    required this.title,
-    required this.subtitle,
-    required this.itemCount,
-    required this.itemBuilder,
-    required this.empty,
-  });
+/// A page opened from Spending: a title bar with back, then sections that scroll.
+class _DetailScaffold extends StatelessWidget {
+  const _DetailScaffold({required this.title, required this.children});
 
   final String title;
-  final String subtitle;
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
-  final String empty;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final side = context.sidePad(_maxWidth);
-    // The header holds just the title, on one line. The month (and count) open the
-    // list instead, where they can wrap at any text size rather than be cut off.
-    final intro = Padding(
-      padding: const EdgeInsets.only(top: Space.l, bottom: Space.xs),
-      child: Text(subtitle, style: Styles.meta),
-    );
     return Scaffold(
       appBar: AppBar(
         title: Heading(title, style: Styles.title),
         bottom: const PreferredSize(preferredSize: Size.fromHeight(1), child: Divider()),
       ),
-      body: ListView.builder(
-        padding: EdgeInsets.fromLTRB(side, 0, side, Space.xl + MediaQuery.paddingOf(context).bottom),
-        itemCount: itemCount + 1,
-        itemBuilder: (context, i) {
-          if (i > 0) return itemBuilder(context, i - 1);
-          if (itemCount > 0) return intro;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              intro,
-              const SizedBox(height: Space.xl),
-              Text(empty, style: Styles.meta),
-            ],
-          );
-        },
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(side, Space.xl, side, Space.xxl + MediaQuery.paddingOf(context).bottom),
+        children: children,
       ),
     );
   }
 }
 
-/// A row with a divider above it unless it's the first in its group.
-Widget _divided(bool first, Widget child, {double vertical = Space.l}) => Column(
-  crossAxisAlignment: CrossAxisAlignment.stretch,
-  children: [
-    if (!first) const Divider(),
-    Padding(
-      padding: EdgeInsets.symmetric(vertical: vertical),
-      child: child,
-    ),
-  ],
-);
-
-/// Every category; open one to see its places, highest first, with how often.
-class CategoriesPage extends StatelessWidget {
-  const CategoriesPage({super.key, required this.summary, required this.label});
-
-  final CycleSummary summary;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => _ListPage(
-    title: 'Categories',
-    subtitle: label,
-    empty: 'No spending this month.',
-    itemCount: summary.categories.length,
-    itemBuilder: (_, i) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (i > 0) const Divider(),
-        _CategoryTile(category: summary.categories[i], spentCents: summary.spentCents),
-      ],
-    ),
-  );
-}
-
-class _CategoryTile extends StatefulWidget {
-  const _CategoryTile({required this.category, required this.spentCents});
+/// One category in one month: how much and how big a share, where, and each payment.
+class CategoryPage extends StatelessWidget {
+  const CategoryPage({
+    super.key,
+    required this.category,
+    required this.summary,
+    required this.label,
+    required this.now,
+  });
 
   final CategoryTotal category;
-  final int spentCents;
-
-  @override
-  State<_CategoryTile> createState() => _CategoryTileState();
-}
-
-class _CategoryTileState extends State<_CategoryTile> {
-  bool _open = false;
-
-  void _toggle() {
-    HapticFeedback.selectionClick();
-    setState(() => _open = !_open);
-  }
+  final CycleSummary summary;
+  final String label;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
-    final cat = widget.category;
-    final motion = context.reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final share = summary.spentCents > 0 ? (category.cents * 100 / summary.spentCents).round() : 0;
+    final payments = [
+      for (final t in summary.transactions)
+        if (t.isSpending && t.category == category.name) t,
+    ];
+    return _DetailScaffold(
+      title: category.name,
       children: [
-        Semantics(
-          button: true,
-          expanded: _open,
-          onTapHint: _open ? 'Hide places' : 'Show places',
-          child: InkWell(
-            onTap: _toggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Space.l),
-              child: InfoRow(
-                name: cat.name,
-                amount: rm(cat.cents),
-                // ⌄ opens in place; › is kept for "goes to another page".
-                trailing: AnimatedRotation(
-                  turns: _open ? 0.5 : 0,
-                  duration: motion,
-                  child: const ExcludeSemantics(child: Icon(Icons.expand_more, color: Palette.muted, size: 22)),
-                ),
-                below: ShareBar(fraction: widget.spentCents == 0 ? 0 : cat.cents / widget.spentCents),
-                lines: [plural(cat.count, 'payment')],
-              ),
-            ),
-          ),
+        Headline(
+          cents: category.cents,
+          size: context.heroSize * 0.85,
+          lines: [
+            '$share% of spending, $label',
+            '${plural(category.count, 'payment')} at ${plural(category.places.length, 'place')}',
+          ],
         ),
-        AnimatedSize(
-          duration: motion,
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: _open ? _places(cat) : const SizedBox(width: double.infinity),
+        const SizedBox(height: Space.xxl),
+        const SectionHeader('Places'),
+        ListSurface(children: [for (final p in category.places) PlaceTile(place: p, showCategory: false)]),
+        const SizedBox(height: Space.xxl),
+        const SectionHeader('Payments'),
+        ListSurface(
+          children: [
+            for (final t in payments)
+              TxnTile(txn: t, now: now, inCategory: true, onTap: () => showTxnDetails(context, t, now)),
+          ],
         ),
       ],
     );
   }
-
-  // The category's places, indented under it with a line on the left, so they read as its children.
-  Widget _places(CategoryTotal cat) => Container(
-    margin: const EdgeInsets.only(left: Space.xs, bottom: Space.l),
-    padding: const EdgeInsets.only(left: Space.l),
-    decoration: const BoxDecoration(
-      border: Border(left: BorderSide(color: Palette.line, width: 2)),
-    ),
-    child: Column(
-      children: [
-        for (var i = 0; i < cat.places.length; i++)
-          _divided(
-            i == 0,
-            InfoRow(
-              name: cat.places[i].name,
-              amount: rm(cat.places[i].cents),
-              lines: [plural(cat.places[i].count, 'time')],
-            ),
-            vertical: Space.m,
-          ),
-      ],
-    ),
-  );
 }
 
-/// Every place, highest first.
+/// Every place in one month, highest first.
 class PlacesPage extends StatelessWidget {
   const PlacesPage({super.key, required this.summary, required this.label});
 
@@ -187,84 +87,14 @@ class PlacesPage extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => _ListPage(
-    title: 'Places',
-    subtitle: label,
-    empty: 'No places this month.',
-    itemCount: summary.places.length,
-    itemBuilder: (_, i) {
-      final p = summary.places[i];
-      return _divided(i == 0, InfoRow(name: p.name, amount: rm(p.cents), lines: [plural(p.count, 'time'), p.category]));
-    },
-  );
-}
-
-/// Every transaction in the month, newest first, grouped by day under a header
-/// with that day's spending, so each row only needs the time.
-class TransactionsPage extends StatelessWidget {
-  TransactionsPage({super.key, required this.summary, required this.label, required this.now})
-    : _items = _groupByDay(summary.transactions);
-
-  final CycleSummary summary;
-  final String label;
-  final DateTime now;
-  final List<Object> _items; // _Day headers and Txn rows, in display order
-
-  static List<Object> _groupByDay(List<Txn> txns) {
-    final items = <Object>[];
-    _Day? day;
-    for (final t in txns) {
-      final date = dateOnly(t.date);
-      if (day == null || day.date != date) {
-        day = _Day(date);
-        items.add(day);
-      }
-      if (t.isSpending) day.spentCents -= t.cents;
-      items.add(t);
-    }
-    return items;
-  }
-
-  @override
-  Widget build(BuildContext context) => _ListPage(
-    title: 'Transactions',
-    subtitle: '$label · ${plural(summary.transactions.length, 'transaction')}',
-    empty: 'No transactions this month.',
-    itemCount: _items.length,
-    itemBuilder: (_, i) => switch (_items[i]) {
-      final _Day day => _DayHeader(day: day, now: now, first: i == 0),
-      final Txn t => _divided(_items[i - 1] is _Day, TxnRow(txn: t, now: now, full: true, timeOnly: true)),
-      _ => const SizedBox.shrink(),
-    },
-  );
-}
-
-class _Day {
-  _Day(this.date);
-  final DateTime date;
-  int spentCents = 0;
-}
-
-/// "Today ............ RM 24.10": the day, and what was spent that day.
-class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.day, required this.now, required this.first});
-
-  final _Day day;
-  final DateTime now;
-  final bool first;
-
-  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(top: first ? Space.l : Space.xl, bottom: Space.xs),
-      child: MergeSemantics(
-        child: Row(
-          children: [
-            Expanded(child: Heading(dayLabel(day.date, now: now))),
-            if (day.spentCents > 0) Text(rm(day.spentCents), style: Styles.meta.copyWith(fontFeatures: tabular)),
-          ],
-        ),
-      ),
+    return _DetailScaffold(
+      title: 'Places',
+      children: [
+        Text('$label · ${plural(summary.places.length, 'place')}', style: Styles.meta),
+        const SizedBox(height: Space.l),
+        ListSurface(children: [for (final p in summary.places) PlaceTile(place: p)]),
+      ],
     );
   }
 }

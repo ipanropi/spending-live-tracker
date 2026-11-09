@@ -24,35 +24,6 @@ class CategoryTotal {
   final List<PlaceTotal> places;
 }
 
-/// "Left until payday" and the pace, for the cycle you're in now.
-class Today {
-  const Today({
-    required this.balanceCents,
-    required this.nextPayday,
-    required this.daysLeft,
-    required this.perDayCents,
-    required this.weekCents,
-    required this.weekStart,
-  });
-
-  /// The Wise balance, which is what's left until the next top-up. Null if Wise didn't send one.
-  final int? balanceCents;
-  final DateTime nextPayday;
-
-  /// Counts today.
-  final int daysLeft;
-
-  /// What you can spend per day until payday. Zero once the balance runs out.
-  final int? perDayCents;
-
-  /// Spent since Monday.
-  final int weekCents;
-
-  /// That Monday. Shown with the week, because just after payday the week
-  /// still holds spending from before it.
-  final DateTime weekStart;
-}
-
 /// One monthly cycle (7th to 6th), summarised.
 class CycleSummary {
   const CycleSummary({
@@ -60,10 +31,10 @@ class CycleSummary {
     required this.isCurrent,
     required this.transactions,
     required this.spentCents,
-    required this.avgPerDayCents,
+    required this.daysCounted,
     required this.categories,
     required this.places,
-    required this.today,
+    required this.previousCents,
   });
 
   final DateTime start;
@@ -72,12 +43,17 @@ class CycleSummary {
   /// Newest first, money in included.
   final List<Txn> transactions;
   final int spentCents;
-  final int avgPerDayCents;
+
+  /// Days of the cycle so far (today included), or all of them for a past cycle.
+  final int daysCounted;
   final List<CategoryTotal> categories;
   final List<PlaceTotal> places;
 
-  /// Only for the current cycle.
-  final Today? today;
+  /// What the cycle before had spent by the same point (the same number of days in),
+  /// for comparison. Null when that cycle is older than what was loaded from Wise.
+  final int? previousCents;
+
+  int get avgPerDayCents => daysCounted > 0 ? (spentCents / daysCounted).round() : 0;
 }
 
 /// The cycles that have data, newest first. Always includes the current one.
@@ -98,36 +74,30 @@ CycleSummary summarise(Statement s, DateTime start, DateTime now) {
     for (final t in txns)
       if (t.isSpending) t,
   ];
-  final spent = _spent(spending);
   final days = isCurrent ? daysBetween(start, now) + 1 : daysBetween(start, end);
+
+  // The previous cycle, up to the same day number (all of it, for a past cycle).
+  final prevStart = DateTime(start.year, start.month - 1, start.day);
+  final prevEnd = isCurrent ? DateTime(prevStart.year, prevStart.month, prevStart.day + days) : start;
+  final previous = prevStart.isBefore(oldestLoadedCycle(now))
+      ? null
+      : _spent([
+          for (final t in s.transactions)
+            if (t.isSpending &&
+                !t.date.isBefore(prevStart) &&
+                t.date.isBefore(prevEnd.isAfter(start) ? start : prevEnd))
+              t,
+        ]);
 
   return CycleSummary(
     start: start,
     isCurrent: isCurrent,
     transactions: txns,
-    spentCents: spent,
-    avgPerDayCents: days > 0 ? (spent / days).round() : 0,
+    spentCents: _spent(spending),
+    daysCounted: days,
     categories: byCategory(spending),
     places: byPlace(spending),
-    today: isCurrent ? _today(s, now) : null,
-  );
-}
-
-Today _today(Statement s, DateTime now) {
-  final payday = nextPayday(now);
-  final daysLeft = daysBetween(now, payday); // counts today
-  final balance = s.balanceCents;
-  final monday = weekStart(now);
-  return Today(
-    weekStart: monday,
-    balanceCents: balance,
-    nextPayday: payday,
-    daysLeft: daysLeft,
-    perDayCents: balance == null ? null : (balance > 0 ? (balance / daysLeft).floor() : 0),
-    weekCents: _spent([
-      for (final t in s.transactions)
-        if (t.isSpending && !t.date.isBefore(monday)) t,
-    ]),
+    previousCents: previous,
   );
 }
 

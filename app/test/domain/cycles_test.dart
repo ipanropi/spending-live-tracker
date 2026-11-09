@@ -38,15 +38,6 @@ void main() {
     });
   });
 
-  group('weekStart', () {
-    test('Sunday belongs to the week that started on Monday', () {
-      expect(weekStart(DateTime(2026, 11, 8, 18)), DateTime(2026, 11, 2));
-    });
-    test('Monday starts a new week', () {
-      expect(weekStart(DateTime(2026, 11, 9, 0, 1)), DateTime(2026, 11, 9));
-    });
-  });
-
   group('statementWindowStart (Malaysia time, whatever the device zone)', () {
     test('mid-cycle: 7 June midnight MYT', () {
       expect(statementWindowStart(DateTime.utc(2026, 11, 8, 5)), DateTime.utc(2026, 6, 6, 16));

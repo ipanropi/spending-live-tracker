@@ -178,3 +178,8 @@ class _Step extends StatelessWidget {
     );
   }
 }
+
+/// Opens the token screen on top of whatever is showing.
+void openSetup(BuildContext context, {bool replacing = false}) =>
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => SetupPage(replacing: replacing), fullscreenDialog: true));

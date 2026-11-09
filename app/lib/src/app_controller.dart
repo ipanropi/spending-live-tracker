@@ -5,13 +5,18 @@ import 'data/token_store.dart';
 import 'data/wise_api.dart';
 import 'domain/cycles.dart';
 import 'domain/models.dart';
+import 'domain/pace.dart';
 import 'domain/summary.dart';
 
 enum Phase { starting, needsToken, ready }
 
+/// The app's three places: how you're doing now, what you spent, where it goes.
+enum AppTab { now, activity, spending }
+
 typedef SourceFactory = StatementSource Function(String token);
 
-/// The app's state: the token, the last statement, and what the dashboard shows.
+/// The app's state: the token, the last statement, the open tab and month, and what
+/// the screens show.
 ///
 /// Opens instantly with the cached statement, then refreshes from Wise in the
 /// background. Derived numbers are worked out once per change, not on every rebuild.
@@ -41,12 +46,20 @@ class AppController extends ChangeNotifier {
   bool _refreshing = false;
   WiseException? _error;
   DateTime? _selected; // chosen cycle start; null means the current cycle
+  AppTab _tab = AppTab.now;
 
   Phase get phase => _phase;
   Statement? get statement => _statement;
   bool get refreshing => _refreshing;
   WiseException? get error => _error;
   DateTime get now => clock();
+  AppTab get tab => _tab;
+
+  void selectTab(AppTab tab) {
+    if (tab == _tab) return;
+    _tab = tab;
+    notifyListeners();
+  }
 
   Future<void> start() async {
     final token = skipToken ? 'fake' : await tokens.read();
@@ -96,17 +109,24 @@ class AppController extends ChangeNotifier {
   /// The app went into the background.
   void appHidden() => _hiddenAt = clock();
 
-  /// The app is back. After [staleAfter] away it returns to the current month, so
-  /// a quick check never lands on an old month without the wallet figures, and it
-  /// refreshes if the data is old. A quick switch to another app keeps your place.
+  /// The app is back. After [staleAfter] away it opens on Now in the current month,
+  /// because coming back later is a fresh "how am I doing?", and it refreshes if the
+  /// data is old. A quick switch to another app keeps your place.
   Future<void> appResumed() async {
     final hidden = _hiddenAt;
     _hiddenAt = null;
-    if (!showingCurrent && hidden != null && clock().difference(hidden) >= staleAfter) showCurrent();
+    if (hidden != null && clock().difference(hidden) >= staleAfter) {
+      _tab = AppTab.now;
+      if (showingCurrent) {
+        notifyListeners();
+      } else {
+        showCurrent();
+      }
+    }
     await refreshIfStale();
   }
 
-  /// Checks [token] with Wise and, if it works, saves it and loads the dashboard.
+  /// Checks [token] with Wise and, if it works, saves it and loads your data.
   /// Returns an error message to show, or null on success.
   Future<String?> connect(String token) async {
     final source = sourceFor(token.trim());
@@ -125,6 +145,7 @@ class AppController extends ChangeNotifier {
     _statement = null;
     _error = null;
     _selected = null;
+    _tab = AppTab.now;
     _phase = Phase.ready;
     _invalidate();
     notifyListeners();
@@ -141,15 +162,17 @@ class AppController extends ChangeNotifier {
     _statement = null;
     _error = null;
     _selected = null;
+    _tab = AppTab.now;
     _phase = Phase.needsToken;
     _invalidate();
     notifyListeners();
   }
 
-  // ---- What the dashboard shows ----
+  // ---- What the screens show ----
 
   List<DateTime>? _cycles;
   CycleSummary? _summary;
+  PayPeriod? _period;
   DateTime? _derivedDay;
 
   /// Cycles to pick from, newest first.
@@ -165,6 +188,14 @@ class AppController extends ChangeNotifier {
   bool get showingCurrent => _selected == null;
 
   void showCurrent() => selectCycle(cycleStart(now));
+
+  /// The pay period you're in now: what's left and whether it will last. Null until there's data.
+  PayPeriod? get period {
+    _refreshDerivedIfNewDay();
+    final s = _statement;
+    if (s == null) return null;
+    return _period ??= payPeriod(s, now);
+  }
 
   /// The selected cycle, summarised. Null until there's data.
   CycleSummary? get summary {
@@ -183,9 +214,10 @@ class AppController extends ChangeNotifier {
   void _invalidate() {
     _cycles = null;
     _summary = null;
+    _period = null;
   }
 
-  // "Days left" and "this week" change at midnight even without new data.
+  // "Days left", "today" and the pace change at midnight even without new data.
   void _refreshDerivedIfNewDay() {
     final today = dateOnly(now);
     if (_derivedDay != today) {

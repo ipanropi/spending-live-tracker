@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_controller.dart';
-import 'dashboard_page.dart';
 import 'setup_page.dart';
+import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -68,7 +68,7 @@ class _Home extends StatelessWidget {
     return switch (AppScope.of(context).phase) {
       Phase.starting => const Scaffold(), // a blank dark frame for the few ms it takes to read the token
       Phase.needsToken => const SetupPage(),
-      Phase.ready => const DashboardPage(),
+      Phase.ready => const HomeShell(),
     };
   }
 }

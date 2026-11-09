@@ -2,7 +2,7 @@
 
 ## What this is
 
-**There are two versions.** `app/` is the **native Flutter app** (Android, Windows, macOS), which is where work is heading: Irfan asked for one native codebase, lightweight and fast. The Go app at the repo root is the original laptop and hosted-website version. It stays until the Flutter app has worked with a real Wise token; after that, it can be retired. Both share the same money model, described below. The Go dashboard keeps the original layout described under "How it works"; the Flutter dashboard was restructured on 2026-11-09 (see "Dashboard structure" in the Flutter section).
+**There are two versions.** `app/` is the **native Flutter app** (Android, Windows, macOS), which is where work is heading: Irfan asked for one native codebase, lightweight and fast. The Go app at the repo root is the original laptop and hosted-website version. It stays until the Flutter app has worked with a real Wise token; after that, it can be retired. Both share the same money model, described below. The Go dashboard keeps the original layout described under "How it works"; the Flutter app was redesigned on 2026-11-09 around the pay period, with three tabs (see "App structure" in the Flutter section).
 
 Irfan's personal spending tracker (Malaysia, RM). A small Go app that pulls his MYR transactions from the Wise API and shows a dashboard in the browser. It runs either on his laptop or, in hosted mode, as a private password-protected website for his other devices (Android, Windows, sometimes a Mac). It's "somewhat live": he presses **Update** and it fetches fresh data from Wise.
 
@@ -91,7 +91,7 @@ Everything in `web/` is embedded into the binary with `go:embed web`. There are 
 
 ## The Flutter app (`app/`)
 
-**Status (2026-11-09):** built and tested here (`flutter analyze` clean, 87 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
+**Status (2026-11-09):** built and tested here (`flutter analyze` clean, 97 unit and widget tests passing, screenshots checked via a throwaway web build). **Android, Windows and macOS builds happen only in CI**: this sandbox can't reach `dl.google.com`, so there's no Android SDK, and Windows and macOS builds need those OSes. **It has never run against the real Wise API.**
 
 **Why Flutter:** it was chosen over Compose Multiplatform, React Native, .NET MAUI, Tauri and Rust (Slint). It has the most mature single codebase across Android, Windows and macOS, compiles AOT, and Dart is close to TS and Kotlin. Rust was rejected for this app: a thin Android ecosystem (secure storage, widgets) and a steep curve for no felt speed gain.
 
@@ -110,68 +110,78 @@ Release builds use `--obfuscate --split-debug-info`, and Android ships one APK p
 - the parsing is loose, like the Go version;
 - cycles, categories, summaries and formatting are all here.
 
-`lib/src/data/` holds the Wise client (statement JSON is parsed with `compute`, off the UI thread), `TokenStore`, `StatementCache` and `FakeSource`. `lib/src/app_controller.dart` holds the state. `lib/src/ui/` holds the theme, widgets, dashboard, detail pages, setup and settings. See `app/README.md`.
+`lib/src/data/` holds the Wise client (statement JSON is parsed with `compute`, off the UI thread), `TokenStore`, `StatementCache` and `FakeSource`. `lib/src/app_controller.dart` holds the state. `lib/src/ui/` holds the theme, shared widgets, the shell and its three tabs, the category and places pages, setup and settings. See `app/README.md`.
 
 **Behaviour:**
 - **Cache first:** it opens instantly with the cached statement (`statement.json` in the app support directory, written to a temp file and renamed), then refreshes.
 - **Refreshing:** on launch, on resume when the data is over 5 minutes old (`AppLifecycleListener`), by pull-to-refresh, with the ↻ button, or with F5 / Ctrl+R / Cmd+R.
-- **Errors:** if a refresh fails, the old data stays and a red notice appears. A rejected token offers "Update token".
-- **Full lists:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
+- **Errors:** if a refresh fails, the old data stays and a red notice appears on every tab. A rejected token offers "Update token".
+- **Category and places pages:** these open as real routes, so the system back gesture works. Android predictive back is enabled.
 - **Number fitting:** big numbers use `FittedBox(scaleDown)`, the Flutter equivalent of `fitNumbers()`.
 
-**Dashboard structure (2026-11-09).** Irfan wanted the layout itself to make sense, not just look good. He shared a ChatGPT critique, which matched an audit done here. Its diagnosis: too many elements had similar visual weight, and there was no clear reading order.
+**App structure (redesigned 2026-11-09, third round).** Irfan asked for an app "designed with thought", not prettier tweaks, and said earlier layout instructions no longer bind. Research first (Apple HIG layout, tab bars, typography and charts pages; Material 3 navigation; NN/g; Monzo's design writing; Copilot Money; burn-down budgets as in PocketSmith; Shneiderman's "overview first, details on demand"; Refactoring UI), then a Claude Design canvas (https://claude.ai/artifact/3M8ieRXnhnhrgEHJJ9spST: Now in two states, Activity, Spending, Category, Desktop), then the build.
 
-**Irfan's rule: one card, one piece of information.** He has said it twice:
-- on the web app: "not combined together inside 1 card";
-- on 2026-11-09: "I don't like how 1 card have 3 different information".
+**Organised around the pay period**, the thing his money actually follows. Three tabs, one question each (`ui/shell.dart`; the open tab is `AppController.tab`, an `AppTab`):
+1. **Now** (`now_page.dart`), "am I OK until payday?":
+   - "Updated …", ↻ and settings (sliders icon) at the top.
+   - **What's left** (`Headline`), coloured by pace: "left until payday, Sun 22 Nov" / "14 days to go".
+   - **Pace card** (`PaceCard`): the verdict in words, then the chart that backs it up. "On pace: RM 162 to spare" / "Spending fast: RM 96 over pace" / "Overspent by RM 20", with "RM 127 a day lasts until payday." under it.
+   - **Pace chart** (`PaceChart`, a `CustomPainter`, no chart package): money left at the end of each day since the last payday, against a dashed even pace from what was there at payday down to zero on the next one, with a dot for now. Its semantics label is one sentence with the numbers.
+   - **Today**: today's payments and "All activity", which switches tab.
+   - Wide windows: money and pace on the left, today on the right.
+2. **Activity** (`activity_page.dart`), "what did I spend?": everything loaded (6 cycles), newest first, grouped by day with each day's total. Search (name or Wise's note) and category chips (most used first; one scrolling row on phones, wrapped from 600 wide). Filtering shows "3 transactions, RM 22.00 spent". Tapping a row opens `showTxnDetails`: when, category, Wise's own name for it, and the note if it adds something.
+3. **Spending** (`spending_page.dart`), "where does my money go?": one month (7th to 6th) at a time.
+   - The stepper reads ‹ This month / Last month / N months ago, with the dates under it ›. It's capped at 400 wide so the arrows stay next to the label.
+   - The total and its average a day.
+   - **The same day last month:** "RM 185 more than last month by day 3", from `CycleSummary.previousCents`. A month in progress against a whole one would always look good. Amber when more, green when less, "About the same" within RM 1, hidden when the month before wasn't loaded.
+   - **By category** (icon, amount, share bar, ›) opens `CategoryPage`: the total, its share, "4 payments at 3 places", then Places and Payments.
+   - **Top places** shows 5, then "All N places" → `PlacesPage`.
+   - Wide windows: categories and places side by side.
 
-So group with **spacing and section headings, never by putting different figures in one card**. A round that followed ChatGPT's "one wallet panel" broke this rule and was undone the same day.
+**The pace maths** (`domain/pace.dart`, `PayPeriod`):
+- **available** = balance + spent since payday, so a top-up during the period counts as if it was there from the start.
+- **even pace left** at the end of today = available × (days − dayNumber) / days. Measuring to the end of today, not to now, means "to spare" is what you could still spend today and stay on pace.
+- **ahead** = balance − even pace left. That gives `onPace`, `fast`, `overspent` (balance < 0), or `unknown` (no balance; the card hides).
+- **a day** = balance ÷ days left, today included.
 
-The dashboard reads top to bottom in the order the questions come up:
-1. **Top bar:** "Updated …" status, ↻ and ⚙ (settings). No title: status is read-only, so it goes where it's seen.
-2. **Wallet group** (`_WalletSection`), three cards:
-   - **Left until payday** is the hero: full width, and the biggest number on the screen.
-   - Under it, side by side: **to spend a day** (was "per day", which read as either spend or can spend) and **spent this week** / "since Mon, 2 Nov".
-   - The "since" line exists because just after payday the calendar week includes spending from before payday, so week > month looked like a bug.
-   - The two small cards stack at text scale ≥ 1.5. On wide screens all three sit in one row, the hero at double width.
-3. **Month picker** (`_MonthPicker`): it heads the month group and no longer titles the screen, because it only controls what's below it, never the wallet. It's a heading (`Styles.section`, 20px, a level above card titles) and a button, at least 48dp.
-4. **Month group** (`_MonthSection`), three cards:
-   - **spent this month**, with the average;
-   - **where it went** (`_BreakdownCard`): a Categories | Places `ChoiceSwitch` that replaced two separate cards (it costs a tap to compare the two), the top 3 rows, and "View all categories" / "View all places";
-   - **transactions**: the latest 3 and "View all transactions".
+**Why this structure:**
+- **Two time frames, no longer on one screen.** The old dashboard put the payday period and the 7th–6th month on one screen, so it needed scope rules and a "Back to current month" button. Now Now is always today and Spending is always a month.
+- **The week figure is gone.** Calendar weeks don't line up with paydays (it needed a "since Mon, 2 Nov" caveat), and pace answers "am I spending too fast?" directly.
+- **A number needs a verdict.** "RM 1,780" alone doesn't say whether that's fine. HIG: every chart gets a headline that says what it shows.
+- **A tab bar for 3–5 top-level places** (HIG, Material): a `NavigationBar` on phones under 600 wide, a `NavigationRail` above.
+- **Details on demand:** a category opens its own page; a transaction opens a sheet.
 
-   On wide screens (≥ 760) the spent card sits above the breakdown, with transactions beside them at equal height (`IntrinsicHeight`).
+**Colour means state:**
+- green: on pace, or less than last month;
+- amber `Palette.warn`: spending fast, or more than last month;
+- red: below zero only, so it still means something when it shows;
+- neutral: spending amounts;
+- green with "+": money in.
 
-**Spacing does the grouping:** `_inGroup` (12) between cards in a group, and `Space.xxl` (32) plus the picker's own height between the groups. A test checks that the gap between groups is more than twice the gap inside one, and that the six facts sit in six different cards.
-
-**Rules this structure depends on:**
-- **Scope:** everything below the month picker is that month. In an earlier month the wallet is replaced by **Back to current month**, because the wallet is about today. The system back gesture (`PopScope`) and Escape also return there.
-- **No silent mode:** `AppController.appResumed()` returns to the current month after `staleAfter` (5 min) in the background (`onHide` → `onResume`). Before this, an old month stuck around and hid the wallet on the next quick check.
-- **Explicit actions:** panels aren't tappable; the `ViewAllButton` labels name the destination, and the detail pages are titled the same (Categories, Places, Transactions). The detail page's month line is the first list item, not in the app bar, so it can wrap at any text size.
-- **› means another page; ⌄/⌃ means expands here** (category dropdowns).
-- **`ChoiceSwitch`, not `SegmentedButton`:**
-  - Flutter's SegmentedButton is 32px under desktop density.
-  - Its intrinsic height leaves out its tap-target padding, which overflowed the equal-height panels at 200% text.
-  - Its segments don't stretch to a fixed box.
-  - ChoiceSwitch is exactly 48dp everywhere, measures true, and its semantics say which option is selected.
-- **Panel** is a `Material`, so button ripples show on it. Inside a panel, a `DecoratedBox` would hide them.
+**Layout rules:**
+- **One topic per card.** Lists sit on one surface (`ListSurface`), with rows split by inset hairlines and the heading outside (`SectionHeader`, whose figure wraps under the title at large text). This replaces the earlier "one card, one fact" rule, which Irfan released; never mix unrelated figures in one card.
+- **Rows** (`_ListRow` behind `TxnTile` and `PlaceTile`): a 40px category icon tile (`categoryIcon()`), name plus one fact on the left, amount plus one fact on the right. At ≥ 1.5× text (`context.largeText`) the right side moves under the name. In a category's own page the icon and category would repeat, so payments show the day and time instead.
+- **Sentences round to whole ringgit** (`rmWhole`: "RM 162 to spare"); lists keep sen.
+- **Back** steps out: an earlier month → this month → the Now tab → out of the app (`PopScope` in the shell). On desktop, Escape does the month step, Ctrl/Cmd+1–3 switch tabs, and F5 / Ctrl+R / Cmd+R refresh. All shortcuts live in the shell, above the focused node.
+- **No silent mode:** after `staleAfter` (5 min) in the background, `appResumed()` opens on Now and the current month.
+- **`Panel` and `ListSurface` are `Material`s**, so ripples show on them.
 
 **UI/UX rules applied (Irfan asked for design principles to be researched and applied; keep them):**
-- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Card padding is 16/20/24 by width. On the dashboard, cards in a group are 12 apart and the groups 32 apart. In the detail pages, rows have 16 above and below. Don't add one-off values.
-- **Type ramp:** `Styles` in `ui/theme.dart`. Big numbers are `MoneyText`: the ringgit big, with "RM" at half size and the cents at 0.6×, both at 81% opacity so the eye lands on the value. 81% is the lowest opacity that keeps the red at 4.5:1 contrast; 70% measured 3.70:1.
-- **Number line:** big numbers (`Figure`) sit in a fixed-height line, `SizedBox` plus `FittedBox`, with text scaling capped at 1.3× for the numbers only. All other text scales fully.
+- **4-point spacing scale:** `Space` in `ui/theme.dart` (4, 8, 12, 16, 24, 32). Sections are 24–32 apart, a heading sits 8 above its surface, and rows have 12 above and below. Don't add one-off values.
+- **Type ramp:** `Styles` in `ui/theme.dart`. Screen titles are 22, section titles 16. Big numbers are `MoneyText`: the ringgit big, with "RM" at half size and the cents at 0.6×, both at 81% opacity so the eye lands on the value. 81% is the lowest opacity that keeps the red at 4.5:1 contrast; 70% measured 3.70:1.
+- **Number line:** `Headline` puts the big number in a fixed-height line (`SizedBox` plus `FittedBox`), with text scaling capped at 1.3× for the number only. All other text scales fully.
 - **Merchant names:** `displayName()` shows Wise's capitals in normal case ("Kantin Pejabat", "Grab Ride"). Codes without vowels (KTM, KFC) and words with digits stay as they are. This is display only; grouping uses the raw name.
-- **48dp targets** (Fitts's law, Material): includes the month picker, the switch and the View all buttons.
+- **48dp targets** (Fitts's law, Material): the tabs, the stepper arrows, the chips, and the View all buttons.
 - **Visibility of status:** `updatedLabel()` shows "Updated just now / 5 min ago / 9:05 am / Yesterday, 9:30 pm" and refreshes itself every 30 s.
-- **Perceived speed:** the first load shows a `Skeleton` in the dashboard's shape, not a spinner. It stays still under "reduce motion", as do the dropdown and month fade (`context.reduceMotion`). The header's refresh spinner keeps moving as essential progress.
-- **Recognition over recall:** `dayLabel()` and `whenLabel()` give "Today, 2:15 pm" and "Yesterday". All transactions are grouped by day under "Today · RM 24.60" headers, so rows show only the time (Gestalt proximity).
-- **Errors:** `Notice` shows a title ("Couldn't reach Wise"), the reason, and "Showing saved data from …", one per line, with the fix as a button.
+- **Perceived speed:** the first load shows a `Skeleton` in each screen's shape, not a spinner. It stays still under "reduce motion", as does the month fade (`context.reduceMotion`). The refresh spinner keeps moving as essential progress.
+- **Recognition over recall:** `dayLabel()` and `whenLabel()` give "Today, 2:15 pm" and "Yesterday". Activity groups rows by day, so rows show only the time.
+- **Errors:** `ErrorBanner` (on every tab) shows a title ("Couldn't reach Wise"), the reason, and "Showing saved data from …", one per line, with the fix as a button.
 - **Accessibility:**
-  - Card titles, day headers and the month picker are `Heading`s (screen-reader headings).
-  - Each `Figure` reads as one sentence.
-  - Tests run at 200% text on three screen sizes, including the settings sheet, which scrolls.
+  - Screen titles, section headings, the verdict and the stepper are `Heading`s.
+  - Headlines and the chart each read as one sentence.
+  - Tests run at 200% text on three screen sizes, through every screen and the settings sheet.
 - **Native feel (Jakob's law):**
-  - A selection haptic on month change, the Categories | Places switch and category expand.
+  - A selection haptic on tab change, month step and filter chip.
   - A short fade when switching months.
   - The system back gesture.
 - **Setup:** first run shows the four token steps. "Change Wise token" folds them behind "How to get a token", because you've done it before.

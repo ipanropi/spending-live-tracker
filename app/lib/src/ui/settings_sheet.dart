@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'dashboard_page.dart';
+import 'setup_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 

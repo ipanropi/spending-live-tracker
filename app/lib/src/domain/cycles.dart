@@ -43,8 +43,21 @@ DateTime nextPayday(DateTime now) {
   return candidates.firstWhere((d) => d.isAfter(today));
 }
 
-/// Monday of the week containing [now], at midnight.
-DateTime weekStart(DateTime now) => DateTime(now.year, now.month, now.day - (now.weekday - 1));
+/// The payday the current pay period started on: today, if today is a payday.
+DateTime lastPayday(DateTime now) {
+  final today = dateOnly(now);
+  final candidates = [
+    for (final month in [-1, 0])
+      for (final day in paydays) DateTime(today.year, today.month + month, day),
+  ]..sort();
+  return candidates.lastWhere((d) => !d.isAfter(today));
+}
+
+/// The oldest monthly cycle the app loads from Wise ([cyclesToLoad] back, counting this one).
+DateTime oldestLoadedCycle(DateTime now) {
+  final current = cycleStart(now);
+  return DateTime(current.year, current.month - (cyclesToLoad - 1), current.day);
+}
 
 /// Start of the Wise statement window: the start of the cycle [cyclesToLoad] - 1
 /// cycles back, at midnight Malaysia time, as a UTC instant. Worked out in

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../domain/format.dart';
+import '../domain/models.dart';
+import '../domain/summary.dart';
 import 'theme.dart';
 
 /// Gives widgets below it access to the [AppController].
@@ -92,122 +94,6 @@ class MoneyText extends StatelessWidget {
       style: style,
       maxLines: 1,
       textScaler: textScaler,
-    );
-  }
-}
-
-/// A figure: the number on its own line as the focal point, then one short
-/// phrase per line under it. Read by screen readers as one sentence.
-class Figure extends StatelessWidget {
-  const Figure({super.key, required this.cents, required this.lines, this.color, this.hero = false});
-
-  final int? cents;
-  final List<String> lines;
-  final Color? color;
-
-  /// The one number that matters most on the screen.
-  final bool hero;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = hero ? context.heroSize : context.statSize;
-    // The numbers are already large; past 1.3× they'd only be shrunk back to fit.
-    // All the other text scales fully with the system setting.
-    final scaler = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
-    return Semantics(
-      container: true,
-      // "RM 1,780.00, left until 22 Nov, 14 days left"
-      label: [if (cents == null) 'Unknown' else rm(cents!), ...lines].join(', '),
-      excludeSemantics: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // A fixed-height line for the number: long amounts shrink just enough to fit.
-          SizedBox(
-            height: scaler.scale(size) * 1.15,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: MoneyText(cents, size: size, color: color, textScaler: scaler),
-            ),
-          ),
-          SizedBox(height: hero ? Space.m : Space.s),
-          Text(lines.first, style: hero ? Styles.desc.copyWith(fontSize: 16) : Styles.desc),
-          for (final line in lines.skip(1)) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.extra)],
-        ],
-      ),
-    );
-  }
-}
-
-/// A list row: the name with the amount on the right, then one piece of
-/// information per line under it.
-class InfoRow extends StatelessWidget {
-  const InfoRow({
-    super.key,
-    required this.name,
-    required this.amount,
-    this.amountColor,
-    this.lines = const [],
-    this.below,
-    this.trailing,
-  });
-
-  final String name;
-  final String amount;
-  final Color? amountColor;
-  final List<String> lines;
-
-  /// Shown right under the first line, before [lines]. Used for the share bar.
-  final Widget? below;
-
-  /// After the amount, e.g. a dropdown arrow.
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return MergeSemantics(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: Text(displayName(name), style: Styles.rowName)),
-              const SizedBox(width: Space.l),
-              Text(amount, style: Styles.rowAmount.copyWith(color: amountColor)),
-              if (trailing != null) ...[const SizedBox(width: Space.m), trailing!],
-            ],
-          ),
-          ?below,
-          for (final line in lines) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.meta)],
-        ],
-      ),
-    );
-  }
-}
-
-/// Rows separated by dividers, each with the same breathing room.
-class RowList extends StatelessWidget {
-  const RowList({super.key, required this.rows, this.vertical = Space.l});
-
-  final List<Widget> rows;
-  final double vertical;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const Divider(),
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: vertical),
-            child: rows[i],
-          ),
-        ],
-      ],
     );
   }
 }
@@ -302,73 +188,6 @@ class ViewAllButton extends StatelessWidget {
           const Chevron(size: 20),
         ],
       ),
-    );
-  }
-}
-
-/// A two-or-more-way switch, like Categories | Places: labelled options with the
-/// chosen one filled. Exactly 48dp tall on every platform, so it's an easy target
-/// and measures true when panels share a height (Flutter's SegmentedButton is
-/// shorter on desktop and under-reports its height).
-class ChoiceSwitch<T> extends StatelessWidget {
-  const ChoiceSwitch({super.key, required this.options, required this.selected, required this.onChanged});
-
-  final List<(T, String)> options;
-  final T selected;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    // Clipped to the 4px corners, with the outline drawn over the chosen side's fill.
-    return ClipRRect(
-      borderRadius: corners,
-      child: DecoratedBox(
-        position: DecorationPosition.foreground,
-        decoration: BoxDecoration(
-          borderRadius: corners,
-          border: Border.all(color: Palette.line),
-        ),
-        child: _row(),
-      ),
-    );
-  }
-
-  Widget _row() {
-    return Row(
-      children: [
-        for (final (value, label) in options)
-          Expanded(
-            child: Semantics(
-              button: true,
-              selected: value == selected,
-              inMutuallyExclusiveGroup: true,
-              child: Material(
-                color: value == selected ? Palette.line : Colors.transparent,
-                child: InkWell(
-                  onTap: value == selected ? null : () => onChanged(value),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: Space.s, vertical: Space.xs),
-                        child: Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            height: 1.3,
-                            color: value == selected ? Palette.text : Palette.muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -543,4 +362,330 @@ class _MarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MarkPainter oldDelegate) => false;
+}
+
+/// A screen's title row: the title, then the screen's own actions on the right.
+class ScreenHeader extends StatelessWidget {
+  const ScreenHeader(this.title, {super.key, this.actions = const []});
+
+  final String title;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 56),
+      child: Row(
+        children: [
+          Expanded(child: Heading(title, style: Styles.screenTitle)),
+          ...actions,
+        ],
+      ),
+    );
+  }
+}
+
+/// A section's heading, with an optional figure on the right ("Today · RM 24.60 spent").
+class SectionHeader extends StatelessWidget {
+  const SectionHeader(this.title, {super.key, this.trailing});
+
+  final String title;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    // Side by side when they fit; with large text the figure wraps under the title.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.s),
+      child: MergeSemantics(
+        child: SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.end,
+            spacing: Space.l,
+            children: [
+              Heading(title),
+              if (trailing != null) Text(trailing!, style: Styles.meta.copyWith(fontSize: 14, fontFeatures: tabular)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rows on one surface, separated by hairlines: a list that reads as one thing.
+class ListSurface extends StatelessWidget {
+  const ListSurface({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      child: Material(
+        color: Palette.card,
+        shape: const RoundedRectangleBorder(
+          borderRadius: corners,
+          side: BorderSide(color: Palette.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const Divider(indent: Space.l, endIndent: Space.l),
+              children[i],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The icon for a category, so lists can be scanned by shape before reading.
+IconData categoryIcon(String category) => switch (category) {
+  'Food & Drinks' => Icons.restaurant,
+  'Groceries' => Icons.shopping_basket_outlined,
+  'Transport' => Icons.directions_transit_outlined,
+  'Shopping' => Icons.shopping_bag_outlined,
+  'Bills' => Icons.receipt_outlined,
+  'AI & software' => Icons.memory_outlined,
+  'Entertainment' => Icons.movie_outlined,
+  'Transfers' => Icons.swap_horiz,
+  'Currency exchange' => Icons.currency_exchange,
+  'Money in' => Icons.south_west,
+  _ => Icons.more_horiz,
+};
+
+/// A category's icon on a small square.
+class CategoryIcon extends StatelessWidget {
+  const CategoryIcon(this.category, {super.key});
+
+  final String category;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      width: 40,
+      height: 40,
+      decoration: const BoxDecoration(color: Palette.tile, borderRadius: corners),
+      child: Icon(categoryIcon(category), size: 20, color: Palette.text2),
+    ),
+  );
+}
+
+/// A list row: an optional category icon, the name and one fact under it on the left,
+/// the amount and one fact under it on the right. With large text the right side
+/// moves under the name, so neither is squeezed.
+class _ListRow extends StatelessWidget {
+  const _ListRow({
+    required this.icon,
+    required this.name,
+    required this.under,
+    required this.amount,
+    required this.amountColor,
+    required this.aside,
+    this.onTap,
+  });
+
+  final String? icon;
+  final String name;
+  final String? under;
+  final String amount;
+  final Color? amountColor;
+  final String? aside;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final stacked = context.largeText;
+    final amountText = Text(amount, style: Styles.rowAmount.copyWith(color: amountColor));
+    Widget meta(String text) => Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(text, style: Styles.meta),
+    );
+    final row = Row(
+      crossAxisAlignment: stacked ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      children: [
+        if (icon != null) ...[CategoryIcon(icon!), const SizedBox(width: Space.m)],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: Styles.rowName),
+              if (stacked) amountText,
+              if (under != null) meta(under!),
+              if (stacked && aside != null) meta(aside!),
+            ],
+          ),
+        ),
+        if (!stacked) ...[
+          const SizedBox(width: Space.m),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [amountText, if (aside != null) meta(aside!)]),
+        ],
+      ],
+    );
+    final padded = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
+      child: row,
+    );
+    return MergeSemantics(
+      child: onTap == null ? padded : InkWell(onTap: onTap, child: padded),
+    );
+  }
+}
+
+/// A transaction: its category's icon, the place and the category, the amount and the
+/// time. In a category's own list the icon and category would repeat, so the day
+/// and time take their place.
+class TxnTile extends StatelessWidget {
+  const TxnTile({super.key, required this.txn, required this.now, this.inCategory = false, this.onTap});
+
+  final Txn txn;
+  final DateTime now;
+  final bool inCategory;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final moneyIn = !txn.isSpending;
+    return _ListRow(
+      icon: inCategory ? null : txn.category,
+      name: displayName(txn.name),
+      under: inCategory ? whenLabel(txn.date, now: now) : txn.category,
+      amount: '${moneyIn ? '+' : ''}${rm(txn.cents.abs())}',
+      amountColor: moneyIn ? Palette.good : null,
+      aside: inCategory ? null : time12(txn.date),
+      onTap: onTap,
+    );
+  }
+}
+
+/// A big amount with the lines that explain it, for the top of a screen.
+class Headline extends StatelessWidget {
+  const Headline({super.key, required this.cents, required this.lines, this.color, this.size});
+
+  final int? cents;
+  final List<String> lines;
+  final Color? color;
+  final double? size;
+
+  @override
+  Widget build(BuildContext context) {
+    final big = size ?? context.heroSize;
+    final scaler = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
+    return Semantics(
+      container: true,
+      label: [if (cents == null) 'Unknown' else rm(cents!), ...lines].join(', '),
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: scaler.scale(big) * 1.15,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: MoneyText(cents, size: big, color: color, textScaler: scaler),
+            ),
+          ),
+          const SizedBox(height: Space.s),
+          Text(lines.first, style: Styles.desc.copyWith(fontSize: 16)),
+          for (final line in lines.skip(1)) ...[const SizedBox(height: Space.xs), Text(line, style: Styles.extra)],
+        ],
+      ),
+    );
+  }
+}
+
+/// A place's total: its name (and category, where the list mixes them), then the
+/// amount and how often.
+class PlaceTile extends StatelessWidget {
+  const PlaceTile({super.key, required this.place, this.showCategory = true});
+
+  final PlaceTotal place;
+  final bool showCategory;
+
+  @override
+  Widget build(BuildContext context) => _ListRow(
+    icon: showCategory ? place.category : null,
+    name: displayName(place.name),
+    under: showCategory ? place.category : null,
+    amount: rm(place.cents),
+    amountColor: null,
+    aside: plural(place.count, 'time'),
+  );
+}
+
+/// One transaction in full: everything Wise sent that the row leaves out.
+Future<void> showTxnDetails(BuildContext context, Txn txn, DateTime now) {
+  final moneyIn = !txn.isSpending;
+  final note = txn.note;
+  // Card notes ("Card transaction of 12.50 MYR issued by …") only repeat what's shown.
+  final usefulNote =
+      note.isNotEmpty &&
+      note.toLowerCase() != txn.name.toLowerCase() &&
+      !note.toLowerCase().startsWith('card transaction of ');
+  final shownName = displayName(txn.name);
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheet) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CategoryIcon(txn.category),
+                const SizedBox(width: Space.m),
+                Expanded(child: Heading(shownName, style: Styles.title)),
+              ],
+            ),
+            const SizedBox(height: Space.l),
+            Semantics(
+              label: '${moneyIn ? 'Received' : 'Spent'} ${rm(txn.cents.abs())}',
+              excludeSemantics: true,
+              child: MoneyText(txn.cents.abs(), size: 32, color: moneyIn ? Palette.good : null),
+            ),
+            const SizedBox(height: Space.l),
+            _Detail('When', whenLabel(txn.date, now: now)),
+            _Detail('Category', txn.category),
+            if (shownName != txn.name) _Detail('Name from Wise', txn.name),
+            if (usefulNote) _Detail('Note', note),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _Detail extends StatelessWidget {
+  const _Detail(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(top: Space.m),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Styles.meta),
+            const SizedBox(height: 2),
+            Text(value, style: Styles.rowName),
+          ],
+        ),
+      ),
+    );
+  }
 }

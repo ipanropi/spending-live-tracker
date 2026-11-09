@@ -19,12 +19,16 @@ Pushing a tag such as `v1.0.0` builds all three and attaches them to a GitHub re
 1. On wise.com, go to **Settings**, then **Integrations and tools**, then **API tokens**, and add a token with **Read only** access.
 2. Paste it into the app and tap **Connect**.
 
-The app checks the token with Wise before saving it. To change or remove it later, use the **⚙** button.
+The app checks the token with Wise before saving it. To change or remove it later, use the settings button (sliders icon) on Now.
 
 ## How it behaves
 
-- **Reading order:** what's left until payday comes first, with what you can spend a day and what you've spent this week. Below that is the month: what it cost, where it went (by category or by place), and its latest transactions. Each list has a **View all** button.
-- **Earlier months:** pick one from the month heading under the wallet. **Back to current month**, the back gesture or Escape returns. After 5 minutes away, the app opens on the current month again.
+- **Three tabs, one question each.** A tab bar on phones, a side rail on wider windows:
+  - **Now: am I OK until payday?** What's left, whether you're on pace (a chart of money left against an even pace to payday), what a day can be, and today's payments.
+  - **Activity: what did I spend?** Every transaction by day, with search and category filters.
+  - **Spending: where does it go?** One month (7th to 6th) at a time: the total, the same day last month, categories (tap one for its places and payments) and top places.
+- **Earlier months:** step back with ‹ on Spending. The back gesture or Escape returns to this month. After 5 minutes away, the app opens on Now and the current month.
+- **Keyboard:** Ctrl+1/2/3 (Cmd on a Mac) switch tabs.
 - **Opens instantly:** it shows the last data it saved while fresh data loads.
 - **Refreshing:** it refreshes when it opens and when you come back to it (if the data is over 5 minutes old). You can also pull down, tap ↻, or press F5 / Ctrl+R on a computer.
 - **Pay cycles:** "Left" counts down to the next payday (the 7th or the 22nd). The month summary runs from the 7th to the 6th. Both are set in `lib/src/domain/cycles.dart`.
@@ -48,10 +52,10 @@ To test against the fake Wise server from a desktop build, run `python3 ../dev/m
 
 | Path | What's there |
 |---|---|
-| `lib/src/domain/` | Pure Dart: models (money in sen), Wise JSON parsing, categories, pay cycles, summaries, formatting |
+| `lib/src/domain/` | Pure Dart: models (money in sen), Wise JSON parsing, categories, pay cycles, the pay-period pace, monthly summaries, formatting |
 | `lib/src/data/` | The Wise API client, secure token storage, the on-device cache, fake data |
 | `lib/src/app_controller.dart` | App state (`ChangeNotifier`), with derived numbers worked out once per change |
-| `lib/src/ui/` | Theme, shared widgets, dashboard, full-list pages, setup, settings |
+| `lib/src/ui/` | Theme, shared widgets, the shell and its three tabs (Now, Activity, Spending), category and places pages, setup, settings |
 | `test/` | Domain unit tests, controller tests, and widget tests on three screen sizes |
 
 ### Android signing (optional, recommended)

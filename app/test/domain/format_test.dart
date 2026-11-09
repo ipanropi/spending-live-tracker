@@ -56,11 +56,16 @@ void main() {
     expect(displayName('Ali Bin Abu'), 'Ali Bin Abu'); // already mixed case: left alone
   });
 
-  test('since when a running total started', () {
-    final now = DateTime(2026, 11, 8, 15);
-    expect(sinceLabel(DateTime(2026, 11, 2), now: now), 'since Mon, 2 Nov');
-    expect(sinceLabel(DateTime(2026, 11, 7), now: now), 'since yesterday');
-    expect(sinceLabel(DateTime(2026, 11, 8), now: now), 'since today');
+  test('whole ringgit for sentences, rounded', () {
+    expect(rmWhole(16237), 'RM 162');
+    expect(rmWhole(8650), 'RM 87');
+    expect(rmWhole(186650), 'RM 1,867');
+    expect(rmWhole(-2000), '−RM 20');
+    expect(rmWhole(40), 'RM 0');
+  });
+
+  test('a near date with its weekday', () {
+    expect(weekdayDayMonth(DateTime(2026, 11, 22)), 'Sun 22 Nov');
   });
 
   test('plural', () {

@@ -29,6 +29,9 @@ String rm(int cents) {
 /// "8 Nov"
 String dayMonth(DateTime d) => '${d.day} ${_months[d.month - 1]}';
 
+/// "Sun 22 Nov": a date close enough that the weekday helps.
+String weekdayDayMonth(DateTime d) => '${_weekdays[d.weekday - 1]} ${dayMonth(d)}';
+
 /// "2:15 pm"
 String time12(DateTime d) {
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
@@ -58,12 +61,11 @@ String updatedLabel(DateTime fetched, {required DateTime now}) {
   return 'Updated ${whenLabel(fetched, now: now)}';
 }
 
-/// "since Mon, 2 Nov", "since yesterday", "since today": when a running total started.
-String sinceLabel(DateTime start, {required DateTime now}) => switch (_calendarDays(start, now)) {
-  0 => 'since today',
-  1 => 'since yesterday',
-  _ => 'since ${dayLabel(start, now: now)}',
-};
+/// Whole ringgit, for figures in a sentence where sen are noise: "RM 1,866".
+String rmWhole(int cents) {
+  final (sign, number) = rmParts((cents / 100).round() * 100);
+  return '${sign}RM ${number.substring(0, number.length - 3)}';
+}
 
 /// "1 time", "3 times"
 String plural(int n, String word) => '$n $word${n == 1 ? '' : 's'}';

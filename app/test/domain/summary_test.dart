@@ -17,7 +17,9 @@ void main() {
       _t(DateTime(2026, 11, 7, 18), -2500, 'GRAB*RIDE', 'Transport'),
       _t(DateTime(2026, 11, 7, 10), -990, 'ZUS', 'Food & Drinks'),
       _t(DateTime(2026, 11, 7, 9), 89000, 'ME', 'Money in'),
-      _t(DateTime(2026, 11, 6, 12), -4890, 'SPEEDMART', 'Groceries'), // last cycle, but this week
+      _t(DateTime(2026, 11, 6, 12), -4890, 'SPEEDMART', 'Groceries'), // last cycle
+      _t(DateTime(2026, 10, 9, 10), -300, 'KANTIN', 'Food & Drinks'), // last cycle, day 3
+      _t(DateTime(2026, 10, 8, 12), -700, 'KANTIN', 'Food & Drinks'), // last cycle, day 2
       _t(DateTime(2026, 10, 1, 12), -1500, 'OLD', 'Other'), // the cycle before
     ],
   );
@@ -38,22 +40,25 @@ void main() {
     expect(s.places.first.name, 'GRAB*RIDE');
   });
 
-  test('today: left, days to the next payday, per day and this week', () {
-    final today = summarise(statement, DateTime(2026, 11, 7), now).today!;
-    expect(today.balanceCents, 36560);
-    expect(today.nextPayday, DateTime(2026, 11, 22));
-    expect(today.daysLeft, 14);
-    expect(today.perDayCents, 2611); // RM 365.60 / 14, rounded down
-    expect(today.weekCents, 1250 + 650 + 2500 + 990 + 4890); // since Monday 2 Nov, across cycles
-    expect(today.weekStart, DateTime(2026, 11, 2));
+  test('compared with last month by the same day of the month', () {
+    final s = summarise(statement, DateTime(2026, 11, 7), now);
+    expect(s.previousCents, 700); // 7 and 8 Oct only: day 3 isn't over yet this month
   });
 
-  test('a past cycle has no "today" and averages over the whole cycle', () {
+  test('a past cycle is compared with the whole cycle before it', () {
+    expect(summarise(statement, DateTime(2026, 10, 7), now).previousCents, 1500);
+  });
+
+  test('no comparison for the oldest month loaded, since the one before was not fetched', () {
+    expect(summarise(statement, DateTime(2026, 6, 7), now).previousCents, isNull);
+    expect(summarise(statement, DateTime(2026, 7, 7), now).previousCents, 0);
+  });
+
+  test('a past cycle averages over the whole cycle', () {
     final s = summarise(statement, DateTime(2026, 10, 7), now);
     expect(s.isCurrent, isFalse);
-    expect(s.today, isNull);
-    expect(s.spentCents, 4890);
-    expect(s.avgPerDayCents, (4890 / 31).round());
+    expect(s.spentCents, 4890 + 300 + 700);
+    expect(s.avgPerDayCents, (5890 / 31).round());
   });
 
   test('available cycles, newest first, always including the current one', () {
@@ -61,20 +66,5 @@ void main() {
     expect(availableCycles(Statement(transactions: const [], balanceCents: 0, fetchedAt: now), now), [
       DateTime(2026, 11, 7),
     ]);
-  });
-
-  test('no balance, or none left, means no per-day amount to spend', () {
-    final none = summarise(
-      Statement(transactions: const [], balanceCents: null, fetchedAt: now),
-      DateTime(2026, 11, 7),
-      now,
-    );
-    expect(none.today!.perDayCents, isNull);
-    final overdrawn = summarise(
-      Statement(transactions: const [], balanceCents: -500, fetchedAt: now),
-      DateTime(2026, 11, 7),
-      now,
-    );
-    expect(overdrawn.today!.perDayCents, 0);
   });
 }
