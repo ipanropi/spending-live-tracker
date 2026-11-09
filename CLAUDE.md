@@ -193,6 +193,7 @@ The dashboard reads top to bottom in the order the questions come up:
 1. `services.gradle.org`, checked against Gradle's `.sha256`;
 2. the same release asset through GitHub's API (`gh release download`, with the job token), also checked;
 3. the runner's preinstalled Gradle, zipped, but only if it's at least the pinned version, since AGP 9.1 needs Gradle 9.3.1 or newer. This logs a warning.
+- **Green again since 2026-11-09:** once GitHub's outage cleared, runs 42544914234 and 42545991218 built everything. Android is a 23 MB artifact holding three APKs (arm64 is the one for modern phones), and Windows is an 11.5 MB zip. The APKs are signed with the debug key until the `ANDROID_KEYSTORE_*` secrets are added.
 - **Pushes to `main` and manual runs:** an Android APK per CPU type, and a Windows zip.
 - **macOS:** only on `v*` tags and manual runs, because macOS minutes cost 10× on private repos.
 - **Tags:** also create a GitHub release.
