@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'src/app_controller.dart';
+import 'src/background_refresh.dart';
 import 'src/data/fake_source.dart';
 import 'src/data/wise_api.dart';
 import 'src/home_screen_widget.dart';
@@ -21,4 +24,5 @@ void main() {
     onPeriod: updateHomeWidget,
   );
   runApp(SpendingApp(controller: controller));
+  if (!_fakeData) unawaited(scheduleBackgroundRefresh());
 }
