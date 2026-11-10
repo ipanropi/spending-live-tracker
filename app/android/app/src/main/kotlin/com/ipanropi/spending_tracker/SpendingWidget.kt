@@ -8,8 +8,9 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
- * The 1×1 home-screen widget: what you can spend today ("30" over "/day"),
- * coloured by pace, with what's left ("RM 365") as its label.
+ * The 1×1 home-screen widget: what you can spend today, as big as the cell
+ * allows ("30" over "/day"), coloured by pace. What's left is only in the
+ * description that screen readers announce.
  *
  * The Flutter app works the numbers out (lib/src/home_screen_widget.dart) and
  * saves them; this only draws them. Tapping it opens the app.
@@ -33,14 +34,13 @@ class SpendingWidget : HomeWidgetProvider() {
         val description = if (state == null || state == "unknown") {
             "Spending. Open the app to load your balance."
         } else {
-            "$left left, RM $perDay a day"
+            "RM $perDay a day, $left left"
         }
 
         for (id in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.spending_widget).apply {
                 setTextViewText(R.id.per_day, perDay)
                 setTextColor(R.id.per_day, colour)
-                setTextViewText(R.id.left, left)
                 setContentDescription(R.id.root, description)
                 setOnClickPendingIntent(
                     R.id.root,

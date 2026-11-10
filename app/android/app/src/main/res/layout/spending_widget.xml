@@ -1,55 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The 1×1 widget: an icon-sized tile with what you can spend today, and what's
-     left as a label underneath, so it sits in the grid like an app icon. -->
+<!-- The 1×1 widget: the whole cell is one tile with today's allowance as big as it
+     fits, "/day" under it. Nothing else. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@drawable/spending_widget_tile"
     android:gravity="center"
-    android:orientation="vertical">
-
-    <LinearLayout
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/spending_widget_tile"
-        android:gravity="center"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/per_day"
-            android:layout_width="match_parent"
-            android:layout_height="26dp"
-            android:autoSizeMaxTextSize="22sp"
-            android:autoSizeMinTextSize="12sp"
-            android:autoSizeTextType="uniform"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:paddingHorizontal="4dp"
-            android:text="–"
-            android:textColor="#FFA09F97"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:includeFontPadding="false"
-            android:text="/day"
-            android:textColor="#FFA09F97"
-            android:textSize="9sp" />
-    </LinearLayout>
+    android:orientation="vertical"
+    android:paddingHorizontal="6dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="10dp">
 
     <TextView
-        android:id="@+id/left"
+        android:id="@+id/per_day"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:autoSizeMaxTextSize="72sp"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="–"
+        android:textColor="#FFA09F97"
+        android:textStyle="bold" />
+
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:maxLines="1"
-        android:shadowColor="#99000000"
-        android:shadowDy="1"
-        android:shadowRadius="3"
-        android:text="Spending"
-        android:textColor="#FFF0EFEC"
-        android:textSize="11sp" />
+        android:includeFontPadding="false"
+        android:text="/day"
+        android:textColor="#FFA09F97"
+        android:textSize="12sp" />
 </LinearLayout>

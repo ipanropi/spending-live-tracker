@@ -1,7 +1,8 @@
 /// Keeps the Android home-screen widget in step with the app.
 ///
-/// The widget is one icon-sized tile: what you can spend today ("30" over "/day"),
-/// coloured by pace, with what's left ("RM 365") as its label underneath. The app
+/// The widget is one tile filling a 1×1 cell: what you can spend today, as big as
+/// it fits ("30" over "/day"), coloured by pace. What's left ("RM 365") is only
+/// read out by screen readers. The app
 /// works the numbers out and hands them over; the widget only draws them
 /// (`android/app/src/main/kotlin/.../SpendingWidget.kt`), so it changes whenever the
 /// app loads or refreshes its data.
