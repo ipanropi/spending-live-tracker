@@ -46,6 +46,22 @@ void main() {
     expect(cache.value, isNotNull);
   });
 
+  test('tells the home-screen widget about each change of data', () async {
+    final seen = <int?>[];
+    final c = AppController(
+      sourceFor: (_) => source,
+      tokens: tokens,
+      cache: cache,
+      clock: () => clock,
+      onPeriod: (p) => seen.add(p?.balanceCents),
+    );
+    await c.start();
+    await c.connect('good');
+    expect(seen.last, 178000);
+    await c.disconnect();
+    expect(seen.last, isNull); // back to the placeholder
+  });
+
   test('opens with cached data, then refreshes', () async {
     tokens.value = 'good';
     cache.value = await FakeSource(clock: () => clock, delay: Duration.zero).fetchStatement();
