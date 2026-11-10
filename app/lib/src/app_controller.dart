@@ -27,7 +27,12 @@ class AppController extends ChangeNotifier {
     this.cache = const StatementCache(),
     this.clock = DateTime.now,
     this.skipToken = false,
+    this.onPeriod,
   });
+
+  /// Told the current pay period whenever the data or the day changes, so the
+  /// home-screen widget can follow along. Null when nothing is listening.
+  final void Function(PayPeriod? period)? onPeriod;
 
   final SourceFactory sourceFor;
   final TokenStore tokens;
@@ -215,6 +220,8 @@ class AppController extends ChangeNotifier {
     _cycles = null;
     _summary = null;
     _period = null;
+    final listener = onPeriod;
+    if (listener != null) listener(period);
   }
 
   // "Days left", "today" and the pace change at midnight even without new data.
